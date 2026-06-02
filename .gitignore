@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Experiment outputs & logs (local only)
+judge/outputs/
+logs/
+
+# ML framework caches
+cache/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Personal notes
+notes.md
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+.env.*
