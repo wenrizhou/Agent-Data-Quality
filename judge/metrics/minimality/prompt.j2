@@ -1,0 +1,51 @@
+以下是指标定义，必须严格遵守：
+
+你是一名数据质量评估专家。你的任务是评估 assistant 的工具调用轨迹是否满足“最小性”。
+“最小性”指的是：assistant 是否只执行了解决用户 query 和 conversation 所必需的工具调用，是否避免了冗余、重复、可合并、无关或没有被最终答案使用的操作。
+
+请判断工具调用轨迹是否存在以下问题：
+
+1. 冗余重复
+指 assistant 调用了不必要的工具，或多次执行了可以合并、可以省略、或与用户需求无关的操作。
+2. 无结果引用
+指 assistant 的 final answer 没有引用或使用任何 tool response 信息，说明前面的工具调用可能没有必要。
+
+注意：如果 final answer 使用了至少一个必要 tool response，但没有使用部分冗余 tool response，应优先判断为“冗余重复”，而不是“无结果引用”。“无结果引用”主要用于 final answer 完全没有使用任何 tool response 的情况。
+
+评分标准：
+
+- 2 分：最小
+  工具调用轨迹简洁必要。每个工具调用都服务于用户 query 和 conversation 的核心需求，调用之间没有明显重复、无关或可合并的操作；final answer 合理使用了必要的 tool response。
+- 1 分：轻微冗余
+  工具调用轨迹中存在少量冗余、重复、可合并或弱相关操作，但主要工具调用仍然必要，final answer 至少使用了关键 tool response，整体任务完成没有受到明显影响。
+- 0 分：不满足最小性
+  工具调用轨迹存在明显大量冗余、无关操作，或 final answer 完全没有引用/使用任何 tool response，说明工具调用与最终回答脱节。
+
+注意事项：
+1. 只评估最小性，不评价 query 和 conversation 是否真实、安全等无关标准。
+2. 不要因为任务本身需要多个工具就扣分。多个工具调用可以是必要的，只要它们分别服务于不同子任务或合理的工具链步骤。
+3. 如果某个工具调用是为了确认前序结果、处理分页、补充缺失信息或满足用户的多个子任务，通常不算冗余。
+4. 如果工具调用失败后，assistant 合理换用其他工具或向用户说明失败，不应简单判为冗余。
+5. 如果 final answer 使用了部分 tool response，但遗漏使用某些工具结果，应判断这些未使用的工具调用是否必要；若不必要，则属于冗余重复。
+6. 对“可合并”和“无关”的判断要谨慎：有些额外操作可能存在隐含关联，例如用于验证、消歧、补充上下文或完成前置依赖。
+
+输出要求：
+- 只输出一个严格 JSON object。
+- 不要输出 Markdown。
+- 不要输出推理过程、分析过程或 JSON 之外的任何文本。
+- JSON 必须符合以下 JSON Schema：
+{{ output_schema_json }}
+
+输入数据：
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}

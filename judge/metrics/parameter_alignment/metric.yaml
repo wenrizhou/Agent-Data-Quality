@@ -1,0 +1,12 @@
+name: parameter_alignment
+version: 0.1.0
+description: Evaluate whether tool call parameters align with user intent, tool docs, and prior tool responses.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - 参数值不合法
+    - 用户参数提取错误
+    - 轨迹参数提取错误
+defaults: {}

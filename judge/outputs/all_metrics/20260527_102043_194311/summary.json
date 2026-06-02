@@ -1,0 +1,44 @@
+{
+  "created_at": 1779848731,
+  "total_tasks": 60,
+  "skipped_tasks": 0,
+  "written_results": 60,
+  "metrics": {
+    "specificity": {
+      "n_results": 10,
+      "n_scored": 5,
+      "score_mean": 2.0,
+      "n_errors": 5
+    },
+    "coherence": {
+      "n_results": 10,
+      "n_scored": 2,
+      "score_mean": 2.0,
+      "n_errors": 8
+    },
+    "solvability": {
+      "n_results": 10,
+      "n_scored": 1,
+      "score_mean": 0.0,
+      "n_errors": 9
+    },
+    "parameter_alignment": {
+      "n_results": 10,
+      "n_scored": 2,
+      "score_mean": 2.0,
+      "n_errors": 8
+    },
+    "sufficiency": {
+      "n_results": 10,
+      "n_scored": 2,
+      "score_mean": 2.0,
+      "n_errors": 8
+    },
+    "minimality": {
+      "n_results": 10,
+      "n_scored": 0,
+      "score_mean": null,
+      "n_errors": 10
+    }
+  }
+}

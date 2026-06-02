@@ -1,0 +1,11 @@
+name: coherence
+version: 0.1.0
+description: Evaluate semantic coherence and logical task ordering.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - 语义割裂
+    - 步骤不合理
+defaults: {}

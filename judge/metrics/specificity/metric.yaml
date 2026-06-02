@@ -1,0 +1,13 @@
+name: specificity
+version: 0.1.0
+description: Evaluate whether the sample's user requests are specific enough.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - 意图不清
+    - 意图缺失
+    - 对象不清
+    - 对象缺失
+defaults: {}

@@ -1,0 +1,11 @@
+name: minimality
+version: 0.1.0
+description: Evaluate whether tool calls are necessary and non-redundant.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - 冗余重复
+    - 无结果引用
+defaults: {}

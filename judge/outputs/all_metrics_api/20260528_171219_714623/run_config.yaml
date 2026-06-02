@@ -1,0 +1,38 @@
+input:
+  paths:
+    - /work/projects/polyullm/shihao/agent/data/10_canonical/
+  max_samples: 10
+  # max_samples: null
+
+client:
+  # OpenAI-compatible chat-completions API backend.
+  # Environment variables take priority over these config fields:
+  #   MODEL, BASE_URL, API_KEY
+  # BASE_URL may be either a root URL ending in /v1 or a full
+  # /v1/chat/completions endpoint.
+  backend: openai_chat
+  model: null
+  base_url: null
+  api_key: null
+  use_chat_messages: true
+  batch_size: 8
+  max_concurrency: 4
+  temperature: 0.0
+  max_tokens: 2048
+  timeout: 120.0
+  max_retries: 2
+  retry_delay: 1.0
+
+metrics:
+  - name: specificity
+  - name: coherence
+  - name: solvability
+  - name: parameter_alignment
+  - name: sufficiency
+  - name: minimality
+
+output:
+  dir: auto
+  base_dir: outputs
+  run_name: all_metrics_api
+  resume: true

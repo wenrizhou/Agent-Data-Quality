@@ -1,0 +1,13 @@
+name: sufficiency
+version: 0.1.0
+description: Evaluate whether the trajectory and final answer sufficiently satisfy user needs.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - 解答错误
+    - 轨迹不合理
+    - 格式错误
+    - 权限不足
+defaults: {}

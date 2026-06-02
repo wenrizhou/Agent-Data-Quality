@@ -1,0 +1,11 @@
+name: solvability
+version: 0.1.0
+description: Evaluate whether available tools can satisfy the sample's user needs.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - 指向性不可解
+    - 整体不可解
+defaults: {}
