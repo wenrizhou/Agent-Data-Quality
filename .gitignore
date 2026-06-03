@@ -18,6 +18,10 @@ env/
 judge/outputs/
 logs/
 
+# Local data files (not for version control)
+data/*
+!data/.gitkeep
+
 # ML framework caches
 cache/
 
