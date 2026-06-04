@@ -1,0 +1,27 @@
+input:
+  paths:
+    - /Users/wenrizhou/Documents/GitHub/Agent-Data-Quality/data/minhash+semantic/train.jsonl
+  max_samples: 500
+
+client:
+  backend: openai_chat
+  model: null      # 用环境变量 MODEL 传入
+  base_url: null   # 用环境变量 BASE_URL 传入
+  api_key: null    # 用环境变量 API_KEY 传入
+  use_chat_messages: true
+  batch_size: 8
+  max_concurrency: 4
+  temperature: 0.0
+  max_tokens: 2048
+  timeout: 120.0
+  max_retries: 2
+  retry_delay: 1.0
+
+metrics:
+  - name: parameter_alignment
+
+output:
+  dir: auto
+  base_dir: outputs
+  run_name: api_parameter_alignment
+  resume: true
