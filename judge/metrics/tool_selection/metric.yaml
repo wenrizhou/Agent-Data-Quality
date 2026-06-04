@@ -1,0 +1,13 @@
+name: tool_selection
+version: 0.1.0
+description: Evaluate whether the assistant selected appropriate tools/APIs for the user task.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - 必要工具缺失
+    - 工具能力不匹配
+    - 无关工具调用
+    - 工具链顺序错误
+defaults: {}
