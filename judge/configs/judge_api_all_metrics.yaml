@@ -1,6 +1,7 @@
 input:
   paths:
-    - /work/projects/polyullm/shihao/agent/data/10_canonical/
+    # - /work/projects/polyullm/shihao/agent/data/10_canonical/
+    - /Users/wenrizhou/Documents/GitHub/Agent-Data-Quality/data/minhash+semantic/train.jsonl
   max_samples: 10
   # max_samples: null
 
