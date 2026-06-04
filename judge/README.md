@@ -25,12 +25,15 @@ python data_quality\judge\run_judge.py --config data_quality\judge\configs\judge
 Outputs are timestamped by default when `output.dir: auto`:
 
 ```text
-data_quality/judge/outputs/<run_name>/<YYYYMMDD_HHMMSS>/
+data_quality/judge/outputs/<run_name>/<model_name>/<YYYYMMDD_HHMMSS>/
   raw_responses.jsonl
   task_results.jsonl
   summary.json
   run_config.yaml
 ```
+
+When `tqdm` is installed, judging progress is shown with a request-level
+progress bar. Without `tqdm`, the runner falls back to plain progress log lines.
 
 Use a fixed path if you want old resume-in-place behavior:
 

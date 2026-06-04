@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import shutil
+import sys
 import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from .data import expand_input_paths, load_cases
 from .io import append_jsonl, load_config, read_jsonl
 from .llm_client import JudgeLLMClient, OpenAIChatClient
 from .registry import MetricPlugin, load_configured_metrics
-from .schemas import JudgeResult, JudgeTask
+from .schemas import JudgeResult, JudgeTask, LLMResponse
 
 
 def run_from_config(
@@ -28,7 +31,12 @@ def run_from_config(
 ) -> None:
     config = load_config(config_path)
     judge_root = Path(__file__).resolve().parent.parent
-    output_dir = _resolve_output_dir(config.get("output") or {}, base_dir=judge_root)
+    client_config = config.get("client") or {}
+    output_dir = _resolve_output_dir(
+        config.get("output") or {},
+        base_dir=judge_root,
+        client_config=client_config,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(config_path, output_dir / f"run_config{config_path.suffix}")
     print(f"[judge] Output dir: {output_dir}")
@@ -59,13 +67,13 @@ def run_from_config(
     print(f"[judge] Loaded {len(metrics)} metrics: "
           f"{', '.join(m.config.name for m in metrics)}")
 
-    client = _build_client(config.get("client") or {})
+    client = _build_client(client_config)
     resume = bool((config.get("output") or {}).get("resume", True))
     runner = JudgeRunner(
         metrics=metrics,
         client=client,
         output_dir=output_dir,
-        client_config=config.get("client") or {},
+        client_config=client_config,
         resume=resume,
     )
     runner.run(cases)
@@ -127,45 +135,81 @@ class JudgeRunner:
         batch_size = int(self.client_config.get("batch_size", 128))
         max_concurrency = int(self.client_config.get("max_concurrency", 32))
         results: list[JudgeResult] = []
+        progress = _build_progress_reporter(metric.config.name, len(tasks))
 
-        for start in range(0, len(tasks), batch_size):
-            batch = tasks[start : start + batch_size]
-            payloads = [_task_to_payload(t, self.client_config) for t in batch]
-            responses = self.client(payloads, max_concurrency=max_concurrency)
-            assert isinstance(responses, list)
+        try:
+            for start in range(0, len(tasks), batch_size):
+                batch = tasks[start : start + batch_size]
+                payloads = [_task_to_payload(t, self.client_config) for t in batch]
+                completed_indices: set[int] = set()
 
-            for task, response in zip(batch, responses):
-                raw_id = _task_key(task, self.client_config)
-                append_jsonl(self.raw_path, {
-                    "raw_response_id": raw_id,
-                    "metric": task.metric,
-                    "sample_id": task.sample_id,
-                    "task_id": task.task_id,
-                    "response": response.to_dict(),
-                })
-                try:
-                    parsed = metric.parse_response(task, response.to_dict())
-                except Exception as exc:  # noqa: BLE001 - isolate metric failures
-                    parsed = JudgeResult(
-                        sample_id=task.sample_id,
-                        metric=task.metric,
-                        metric_version=task.metric_version,
-                        task_id=task.task_id,
-                        error={
-                            "type": type(exc).__name__,
-                            "message": str(exc),
-                        },
+                def handle_completed(task_index: int, response: LLMResponse) -> None:
+                    if task_index in completed_indices:
+                        return
+                    completed_indices.add(task_index)
+                    parsed = self._record_response(
+                        metric,
+                        batch[task_index],
+                        response,
                     )
-                row = parsed.to_dict()
-                row["raw_response_id"] = raw_id
-                row["params_hash"] = _params_hash(
-                    _effective_params(task, self.client_config)
-                )
-                append_jsonl(self.result_path, row)
-                results.append(parsed)
-            print(f"[judge] {metric.config.name}: "
-                  f"{min(start + batch_size, len(tasks))}/{len(tasks)}")
+                    results.append(parsed)
+                    progress.update(1)
+
+                try:
+                    responses = self.client(
+                        payloads,
+                        max_concurrency=max_concurrency,
+                        on_complete=handle_completed,
+                    )
+                except TypeError as exc:
+                    if "on_complete" not in str(exc):
+                        raise
+                    responses = self.client(
+                        payloads,
+                        max_concurrency=max_concurrency,
+                    )
+                assert isinstance(responses, list)
+                for task_index, response in enumerate(responses):
+                    handle_completed(task_index, response)
+        finally:
+            progress.close()
         return results
+
+    def _record_response(
+        self,
+        metric: MetricPlugin,
+        task: JudgeTask,
+        response: LLMResponse,
+    ) -> JudgeResult:
+        raw_id = _task_key(task, self.client_config)
+        response_dict = response.to_dict()
+        append_jsonl(self.raw_path, {
+            "raw_response_id": raw_id,
+            "metric": task.metric,
+            "sample_id": task.sample_id,
+            "task_id": task.task_id,
+            "response": response_dict,
+        })
+        try:
+            parsed = metric.parse_response(task, response_dict)
+        except Exception as exc:  # noqa: BLE001 - isolate metric failures
+            parsed = JudgeResult(
+                sample_id=task.sample_id,
+                metric=task.metric,
+                metric_version=task.metric_version,
+                task_id=task.task_id,
+                error={
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
+        row = parsed.to_dict()
+        row["raw_response_id"] = raw_id
+        row["params_hash"] = _params_hash(
+            _effective_params(task, self.client_config)
+        )
+        append_jsonl(self.result_path, row)
+        return parsed
 
     def _load_done_keys(self) -> set[str]:
         done: set[str] = set()
@@ -257,12 +301,90 @@ def _build_client(config: dict[str, Any]) -> Any:
     )
 
 
-def _resolve_output_dir(output_cfg: dict[str, Any], *, base_dir: Path) -> Path:
+class _TqdmProgressReporter:
+    def __init__(
+        self,
+        label: str,
+        total: int,
+        tqdm_func: Any,
+        stream: TextIO | None,
+    ) -> None:
+        kwargs: dict[str, Any] = {
+            "total": total,
+            "desc": f"[judge] {label}",
+            "unit": "task",
+            "dynamic_ncols": True,
+        }
+        if stream is not None:
+            kwargs["file"] = stream
+        self._bar = tqdm_func(**kwargs)
+
+    def update(self, n: int) -> None:
+        self._bar.update(n)
+
+    def close(self) -> None:
+        self._bar.close()
+
+
+class _PrintProgressReporter:
+    def __init__(self, label: str, total: int, stream: TextIO | None) -> None:
+        self.label = label
+        self.total = total
+        self.stream = stream or sys.stdout
+        self.completed = 0
+        self.started_at = time.monotonic()
+
+    def update(self, n: int) -> None:
+        self.completed = min(self.total, self.completed + n)
+        elapsed = max(0.0, time.monotonic() - self.started_at)
+        rate = self.completed / elapsed if elapsed > 0 else 0.0
+        remaining = max(0, self.total - self.completed)
+        eta = remaining / rate if rate > 0 else 0.0
+        percent = (self.completed / self.total * 100) if self.total else 100.0
+        print(
+            f"[judge] {self.label}: {self.completed}/{self.total} tasks "
+            f"({percent:.1f}%) | elapsed {_format_duration(elapsed)} | "
+            f"eta {_format_duration(eta)} | {rate:.2f} task/s",
+            file=self.stream,
+            flush=True,
+        )
+
+    def close(self) -> None:
+        return None
+
+
+def _build_progress_reporter(
+    label: str,
+    total: int,
+    *,
+    stream: TextIO | None = None,
+) -> Any:
+    try:
+        from tqdm.auto import tqdm
+    except ImportError:
+        return _PrintProgressReporter(label, total, stream)
+    return _TqdmProgressReporter(label, total, tqdm, stream)
+
+
+def _format_duration(seconds: float | int) -> str:
+    total_seconds = max(0, int(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _resolve_output_dir(
+    output_cfg: dict[str, Any],
+    *,
+    base_dir: Path,
+    client_config: dict[str, Any] | None = None,
+) -> Path:
     """Resolve output directory.
 
     Compatibility:
     - output.dir set to a concrete path keeps the old behavior.
-    - output.dir omitted/null/"auto" creates a timestamped path under base_dir.
+    - output.dir omitted/null/"auto" creates a model-named, timestamped path
+      under base_dir.
     - output.timestamped=true appends a timestamp under output.dir.
 
     Relative paths are resolved from the judge package root, not the caller's
@@ -278,7 +400,32 @@ def _resolve_output_dir(output_cfg: dict[str, Any], *, base_dir: Path) -> Path:
 
     output_base = _resolve_path(Path(output_cfg.get("base_dir") or "outputs"), base_dir)
     run_name = str(output_cfg.get("run_name") or "run").strip() or "run"
-    return output_base / run_name / timestamp
+    model_name = _output_model_name(client_config or {})
+    return output_base / run_name / model_name / timestamp
+
+
+def _output_model_name(client_config: dict[str, Any]) -> str:
+    backend = str(client_config.get("backend") or "sglang").lower()
+    if backend in {"openai_chat", "api", "chat_completions"}:
+        model_name = os.environ.get("MODEL") or client_config.get("model")
+    else:
+        model_name = client_config.get("model_path") or client_config.get("model")
+    return _safe_path_component(_model_name_leaf(model_name))
+
+
+def _model_name_leaf(model_name: Any) -> str:
+    raw = str(model_name or "").strip()
+    if not raw:
+        return "unknown_model"
+    if Path(raw).is_absolute():
+        return Path(raw).name or "unknown_model"
+    return raw
+
+
+def _safe_path_component(value: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())
+    safe = re.sub(r"_+", "_", safe).strip("._-")
+    return safe or "unknown_model"
 
 
 def _resolve_path(path: Path, base_dir: Path) -> Path:

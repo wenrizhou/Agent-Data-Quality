@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from concurrent.futures import ProcessPoolExecutor
 from numbers import Integral
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 
@@ -84,6 +84,25 @@ def _plain_input_ids(value: Any) -> list[int]:
     return [int(x) for x in value]
 
 
+async def _post_payloads_in_completion_order(
+    payloads: list[dict[str, Any]],
+    post_one: Callable[[int, dict[str, Any]], Awaitable[tuple[int, LLMResponse]]],
+    *,
+    on_complete: Callable[[int, LLMResponse], None] | None,
+) -> list[LLMResponse]:
+    pending = [
+        asyncio.create_task(post_one(index, payload))
+        for index, payload in enumerate(payloads)
+    ]
+    responses: list[LLMResponse | None] = [None for _ in payloads]
+    for completed in asyncio.as_completed(pending):
+        index, response = await completed
+        responses[index] = response
+        if on_complete is not None:
+            on_complete(index, response)
+    return [response for response in responses if response is not None]
+
+
 class JudgeLLMClient:
     """Batch HTTP client for SGLang-compatible /generate endpoints.
 
@@ -122,12 +141,17 @@ class JudgeLLMClient:
         payloads: dict[str, Any] | list[dict[str, Any]],
         *,
         max_concurrency: int = 8,
+        on_complete: Callable[[int, LLMResponse], None] | None = None,
     ) -> LLMResponse | list[LLMResponse]:
         single = isinstance(payloads, dict)
         batch = [payloads] if single else payloads
         prepared = self._prepare_payloads(batch)
         result = asyncio.run(
-            self._async_batch(prepared, max_concurrency=max_concurrency)
+            self._async_batch(
+                prepared,
+                max_concurrency=max_concurrency,
+                on_complete=on_complete,
+            )
         )
         return result[0] if single else result
 
@@ -170,6 +194,7 @@ class JudgeLLMClient:
         payloads: list[dict[str, Any]],
         *,
         max_concurrency: int,
+        on_complete: Callable[[int, LLMResponse], None] | None = None,
     ) -> list[LLMResponse]:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
@@ -186,8 +211,16 @@ class JudgeLLMClient:
             limits=limits,
             http2=False,
         ) as client:
-            return await asyncio.gather(
-                *(self._post_one(client, sem, payload) for payload in payloads)
+            async def post_one(
+                index: int,
+                payload: dict[str, Any],
+            ) -> tuple[int, LLMResponse]:
+                return index, await self._post_one(client, sem, payload)
+
+            return await _post_payloads_in_completion_order(
+                payloads,
+                post_one,
+                on_complete=on_complete,
             )
 
     async def _post_one(
@@ -278,12 +311,17 @@ class OpenAIChatClient:
         payloads: dict[str, Any] | list[dict[str, Any]],
         *,
         max_concurrency: int = 8,
+        on_complete: Callable[[int, LLMResponse], None] | None = None,
     ) -> LLMResponse | list[LLMResponse]:
         single = isinstance(payloads, dict)
         batch = [payloads] if single else payloads
         prepared = [self._prepare_payload(payload) for payload in batch]
         result = asyncio.run(
-            self._async_batch(prepared, max_concurrency=max_concurrency)
+            self._async_batch(
+                prepared,
+                max_concurrency=max_concurrency,
+                on_complete=on_complete,
+            )
         )
         return result[0] if single else result
 
@@ -311,6 +349,7 @@ class OpenAIChatClient:
         payloads: list[dict[str, Any]],
         *,
         max_concurrency: int,
+        on_complete: Callable[[int, LLMResponse], None] | None = None,
     ) -> list[LLMResponse]:
         headers = {
             "Content-Type": "application/json",
@@ -328,8 +367,16 @@ class OpenAIChatClient:
             limits=limits,
             http2=False,
         ) as client:
-            return await asyncio.gather(
-                *(self._post_one(client, sem, payload) for payload in payloads)
+            async def post_one(
+                index: int,
+                payload: dict[str, Any],
+            ) -> tuple[int, LLMResponse]:
+                return index, await self._post_one(client, sem, payload)
+
+            return await _post_payloads_in_completion_order(
+                payloads,
+                post_one,
+                on_complete=on_complete,
             )
 
     async def _post_one(
