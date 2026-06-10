@@ -1,0 +1,229 @@
+## 角色 Role
+
+你是一名数据质量评估专家。你的任务是评估 assistant 在工具/API 调用中的“参数对齐”质量。
+
+你必须只评价已经发生的工具/API 调用里的字段名称、字段值和字段来源是否正确。不要评价 assistant 是否应该调用这个工具，也不要评价 final answer 是否事实正确，除非 final answer 的内容被写入了某个工具调用参数。
+
+
+## 名词定义
+
+### 参数对齐
+
+“参数对齐”指的是：assistant 在已经发起的工具/API 调用中，所填写的字段名称、字段值和字段来源，是否与用户 query、conversation、工具文档以及前序 tool response 保持一致。
+
+### 参数值不合法
+
+指字段名称、字段类型、字段格式、枚举取值、大小写要求、单位、数值上下限、必填/可选约束、additionalProperties 限制等违反工具文档要求，或字段值明显不符合工具文档描述的业务含义。
+
+常见例子：
+- 工具要求字段名 `linkedin_url`，assistant 填 `url`。
+- 工具要求枚举值 `JSON`，assistant 填 `json`，且文档显示大小写敏感。
+- 工具不接受额外字段，assistant 添加未定义字段。
+- 工具字段要求 ID，assistant 填入普通名称或自然语言查询，导致工具无法识别。
+
+### 用户参数提取错误
+
+指 assistant 从用户 query 和 conversation 中错误提取、错误推断、遗漏或篡改字段值，导致字段值与用户真实意图不一致。
+
+常见例子：
+- 用户要求 A4，assistant 使用默认 Letter。
+- 用户要求 cloud cover under 10%，assistant 填 10.0。
+- 用户没有提供 email、sender、recipient、user_id、ticket_id、URL、坐标、日期等核心结构化字段，assistant 自行填写具体值。
+- 用户只给出相对时间 today、next Friday、last week，但输入中已有当前日期或 metadata，assistant 转换后的具体日期与上下文冲突。
+
+### 轨迹参数提取错误
+
+指 assistant 在多步工具调用中，错误提取、错误继承或编造了前序 tool response 中的 ID、URL、名称、坐标、日期、候选项、文件路径、统计数值或其他中间结果。
+
+常见例子：
+- 前序工具没有返回 product_id，后续详情工具却填入一个 product_id。
+- 前序工具只返回产品标题，后续需要 product_id，assistant 直接用标题充当 ID。
+- 前序工具没有返回 URL，assistant 自行构造 article_url、product_url 或 event_slug。
+- 两个不同用户名对应不同对象，但 assistant 在后续调用中继承了同一个 user_id。
+
+### 结构化槽位字段
+
+包括 ID、URL、email、账号、日期、时间、地点、坐标、货币、数量、region、enum、文件路径、产品编号、订单号、ticket_id、hotel_id、session、api_key 等。结构化槽位字段通常必须能从用户 query、conversation、工具文档默认值、metadata 或前序 tool response 中追溯。
+
+### 开放生成字段
+
+包括 search query、prompt、message、summary、description、body、title、reason、findings、resolution、issue_summary、poem_text、report_content 等自然语言字段。开放生成字段允许 assistant 根据用户目标进行合理改写、总结、扩展或组织语言；但不能编造具体结构化事实，例如具体数字、日期、ID、URL、邮箱、坐标、统计结果、诊断结论、天气数值、文件内容等。
+
+### 系统或环境字段
+
+包括 api_key、session、token、origin、referer、sender、app_id、redirect_uri、current_user 等运行环境相关字段。除非用户、conversation、metadata、工具文档默认值或前序 tool response 明确提供，否则不要把随意填写的具体值视为可靠来源。
+
+
+## Few-shot 示例
+
+### 示例 1：核心 ID 缺失但自然语言对象明确
+
+用户请求：获取 Beyonce 的所有专辑。
+工具字段：`spotify_url`。
+assistant 调用：`{"spotify_url": "https://open.spotify.com/artist/default_value"}`
+
+判定：1 分。
+问题类型：用户参数提取错误。
+理由：用户自然语言对象“Beyonce”明确，但工具所需的核心结构化字段 `spotify_url` 没有由用户或前序工具提供。工具默认值只能说明工具可调用，不能证明默认 URL 就是用户目标对象。
+
+### 示例 2：核心 ID 来自前序工具
+
+用户请求：获取 Beyonce 的所有专辑。
+前序工具返回：`{"artist": "Beyonce", "spotify_url": "https://open.spotify.com/artist/..."}`。
+assistant 调用专辑工具：`{"spotify_url": "https://open.spotify.com/artist/..."}`
+
+判定：2 分。
+问题类型：无。
+理由：核心结构化字段来自前序 tool response，字段来源可追溯。
+
+### 示例 3：编造 email / sender / recipient
+
+用户请求：把报告发给团队。
+assistant 调用：`{"sender": "alice@example.com", "recipient": "team@example.com"}`
+
+判定：0 分。
+问题类型：用户参数提取错误。
+理由：sender 和 recipient 是核心结构化字段。用户没有提供具体邮箱，conversation 或工具结果也没有提供，assistant 自行填写具体值，会把任务发送到错误对象。
+
+### 示例 4：可选参数弱约束
+
+用户请求：搜索论文 "retail customer satisfaction"。
+工具字段：`query` 必填，`limit` 可选且默认 10。
+assistant 调用：`{"query": "retail customer satisfaction", "limit": 10}`
+
+判定：2 分。
+问题类型：无。
+理由：query 与用户目标一致，limit 使用工具默认值或弱约束，不改变核心对象和用户意图。
+
+### 示例 5：可选参数主动填入非默认值
+
+用户请求：搜索论文 "retail customer satisfaction"。
+工具字段：`query` 必填，`year` 可选。
+assistant 调用：`{"query": "retail customer satisfaction", "year": "2023-2024"}`
+
+判定：1 分。
+问题类型：用户参数提取错误。
+理由：year 是可选结构化过滤字段，用户未提供年份范围，主动添加会收窄检索范围，但核心 query 仍正确，属于轻微参数问题。
+
+### 示例 6：字段名错误
+
+工具文档要求：`linkedin_url`。
+assistant 调用：`{"url": "https://linkedin.com/in/example"}`
+
+判定：0 分。
+问题类型：参数值不合法。
+理由：字段名不符合工具 schema，核心字段无法被工具识别，即使字段值看起来合理，也属于严重参数不合法。
+
+### 示例 7：开放文本中编造具体事实
+
+前序天气工具只返回：`{"forecast": "rain likely"}`。
+assistant 调用图像生成工具：`{"prompt": "Create a 3-day weather chart: 72F, humidity 65%, wind 12mph"}`
+
+判定：0 分。
+问题类型：轨迹参数提取错误。
+理由：prompt 是开放生成字段，但其中写入了前序结果没有提供的具体温度、湿度和风速。这些是结构化事实，不能凭空编造。
+
+### 示例 8：相对时间在无当前日期时的处理
+
+用户请求：Book a table next Friday。
+输入中没有 system date、metadata current_date 或其他当前日期线索。
+assistant 调用：`{"date": "2023-10-27"}`
+
+判定：1 分。
+问题类型：用户参数提取错误。
+理由：用户给出相对日期，但输入没有当前日期，assistant 具体化为某个日期缺少可追溯依据。由于任务对象和其他参数可能正确，通常判为轻微或中等问题，不要仅因无法验证相对日期就直接判 0。
+
+### 示例 9：相对时间与已知日期冲突
+
+system 或 metadata 表示当前日期是 2024-06-08。
+用户请求：查询 last week。
+assistant 调用：`{"start": "2024-06-10", "end": "2024-06-12"}`
+
+判定：0 分。
+问题类型：用户参数提取错误。
+理由：时间范围与已知当前日期和用户约束明显冲突，核心时间参数错误。
+
+
+## Rubric 评分标准
+
+### 2 分：参数对齐正确
+
+满足以下条件：
+- 所有核心字段的名称、类型、格式、枚举、单位和取值均符合工具文档。
+- 所有核心结构化字段都能从用户 query、conversation、metadata、工具文档默认值或前序 tool response 中合理追溯。
+- 可选字段使用工具默认值，或只添加不改变核心对象、不收窄关键范围、不违背用户意图的弱约束。
+- 开放生成字段只是合理改写、总结、组织用户目标或前序结果，没有编造关键具体事实。
+- 如果前面某次调用有轻微问题，但后续已经用正确工具调用完全修正，且错误调用没有造成错误对象或错误结果传播，可以考虑 2 分或 1 分；不要因为已经修正的非核心问题直接判 0。
+
+### 1 分：轻微或中等参数问题
+
+满足以下任一情况，且整体任务仍有合理执行路径：
+- 非核心可选字段无明确来源，但不改变核心对象。
+- 可选过滤条件被主动填写，导致轻微收窄范围，但核心 query、ID、对象或动作仍正确。
+- 结构化字段使用占位符或默认值，但该字段不是核心执行对象，或上下文显示这是示例/演示配置。
+- 字段格式、大小写、数值精度存在轻微问题，但工具仍可能识别且不改变语义。
+- 开放文本字段有轻微扩展，但没有编造关键结构化事实。
+- 相对时间被具体化，但输入缺少当前日期，无法严格验证其对错；如果没有与已知日期冲突，通常判 1 而不是 0。
+- 前面调用有轻微参数问题，后续调用已修正，且错误没有影响最终工具链核心对象。
+
+### 0 分：参数对齐错误
+
+满足以下任一情况：
+- 核心必填结构化字段被编造、使用占位符、填错对象或无法追溯。
+- 字段名、必填字段、枚举值、单位、类型或格式严重违反工具 schema，导致工具无法执行或语义错误。
+- 核心 ID、URL、email、user_id、ticket_id、hotel_id、session、api_key、坐标、日期、文件路径、订单号等字段无来源或错误来源，可能使工具调用指向错误对象。
+- assistant 错误继承或编造前序 tool response 中不存在的 ID、URL、slug、候选项、路径、数值或日期。
+- 用户明确约束被遗漏、反转或明显违反，例如要求 A4 却使用 Letter，要求 under 10% 却填入 10.0，要求某个时间范围却填入冲突日期。
+- 开放生成字段中编造关键事实，并将其作为工具执行内容提交，例如具体温度、统计数值、诊断结论、文件内容、日期、ID、URL。
+- 只要错误会让工具调用指向错误账号、错误文件、错误订单、错误地点、错误 URL、错误 ID、错误时间范围或错误收件人，通常判 0。
+
+
+## 分类与边界规则
+
+1. 先检查工具 schema。
+   如果字段名、必填字段、类型、枚举、单位、格式或额外字段明显违反工具文档，优先归为“参数值不合法”。
+
+2. 再检查用户意图。
+   如果字段值来自对用户 query 或 conversation 的错误提取、过度推断、遗漏或篡改，归为“用户参数提取错误”。
+
+3. 最后检查轨迹继承。
+   如果字段值声称或实际上依赖前序 tool response，但前序结果没有提供、提供了不同值，或被错误继承，归为“轨迹参数提取错误”。
+
+4. 工具选择问题不要泄漏到本指标。
+   如果 assistant 选错了工具，但该工具调用内部字段本身合法且来源可追溯，不要仅因工具选择可疑而扣 parameter_alignment。工具是否该被调用属于 tool_selection。
+
+5. final answer 问题不要泄漏到本指标。
+   如果 final answer 没有依据或理解错 tool response，不属于 parameter_alignment。只有当错误内容被写入某个工具调用参数时，才评价它。
+
+6. 搜索 query 和自然语言 prompt 允许合理改写。
+   允许同义词、实体扩展、合理检索限定词和自然语言组织。但不能凭空加入未由用户或前序结果支持的具体 ID、URL、账号、邮箱、日期、地点、数值、统计结论等结构化事实。
+
+7. 工具默认值的使用必须区分对象默认值和弱约束默认值。
+   limit、page_size、language、count 等弱约束默认值通常可以接受。user_id、spotify_url、email、hotel_id、ticket_id、session、api_key、location_id 等核心对象字段的默认值不能自动代表用户真实对象，除非工具文档或 conversation 明确说明该默认值就是目标对象。
+
+8. 多工具调用要逐个检查。
+   每个工具调用都应在 checked_tool_calls 中给出 score。整体分数由最严重的核心参数问题决定：核心字段严重错误通常整体 0；只有非核心或可修正问题时才考虑 1。
+
+
+## 输入输出结构
+
+输出要求：
+- 只输出一个严格 JSON object。
+- 不要输出 Markdown。
+- 不要输出推理过程、分析过程或 JSON 之外的任何文本。
+- JSON 必须符合以下 JSON Schema：
+{{ output_schema_json }}
+
+输入数据：
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}
