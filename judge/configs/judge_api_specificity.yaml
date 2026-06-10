@@ -22,7 +22,7 @@ client:
 
 metrics:
   - name: specificity
-    prompt: prompt_v2.j2
+    prompt: prompt.j2
 
 output:
   dir: auto
