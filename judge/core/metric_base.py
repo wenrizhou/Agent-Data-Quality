@@ -100,7 +100,7 @@ class SampleJsonMetric(BaseMetric):
             task_id=task.task_id,
             score=float(parsed["score"]),
             passed=parsed["score"] >= 2,
-            reason=parsed.get("explanation"),
+            reason=parsed.get("explanation") or parsed.get("reason"),
             details=parsed,
             error=None,
         )
@@ -119,6 +119,7 @@ class SampleJsonMetric(BaseMetric):
                 ensure_ascii=False,
                 indent=2,
             ),
+            "raw_json": json.dumps(sample.raw or {}, ensure_ascii=False, indent=2),
             "allowed_issue_types": json.dumps(
                 sorted(self.allowed_issue_types),
                 ensure_ascii=False,

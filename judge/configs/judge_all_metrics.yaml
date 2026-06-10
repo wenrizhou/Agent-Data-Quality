@@ -32,6 +32,8 @@ metrics:
   - name: solvability
   - name: parameter_alignment
   - name: sufficiency
+  - name: user_requirement_fulfillment
+  - name: final_response_evidence_support
   - name: minimality
 
 output:

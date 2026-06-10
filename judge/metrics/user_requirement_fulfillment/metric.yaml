@@ -1,0 +1,8 @@
+name: user_requirement_fulfillment
+version: 0.1.0
+description: Evaluate whether the assistant final response fulfills all user requirements.
+prompt: prompt.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+defaults: {}
