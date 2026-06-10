@@ -1,0 +1,10 @@
+client:
+  # Retry only failed/null-score specificity rows with a larger output budget.
+  max_tokens: 8192
+  timeout: 300.0
+  max_retries: 2
+  retry_delay: 1.0
+
+retry:
+  error_types:
+    - JSONDecodeError
