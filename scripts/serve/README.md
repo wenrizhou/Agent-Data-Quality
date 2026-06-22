@@ -1,6 +1,6 @@
 # SGLang 推理服务脚本
 
-本目录负责启动 judge 模型的 SGLang 推理服务，供 `data_quality/judge` 打分流程调用。
+本目录负责启动 judge 模型的 SGLang 推理服务，供 `judge` 打分流程调用。
 
 ## 背景：整体工作流
 
@@ -17,8 +17,8 @@ judge runner 本身**不部署模型**，它只是一个 HTTP 客户端。因此
 **场景一：本地/容器，前台运行（推荐调试时用）**
 
 ```bash
-bash data_quality/scripts/serve/serve_sglang.sh \
-  data_quality/scripts/serve/models/qwen3-32b.sh \
+bash scripts/serve/serve_sglang.sh \
+  scripts/serve/models/qwen3-32b.sh \
   --wait
 ```
 
@@ -27,8 +27,8 @@ bash data_quality/scripts/serve/serve_sglang.sh \
 **场景二：本地/容器，后台运行**
 
 ```bash
-bash data_quality/scripts/serve/serve_sglang.sh \
-  data_quality/scripts/serve/models/qwen3-32b.sh \
+bash scripts/serve/serve_sglang.sh \
+  scripts/serve/models/qwen3-32b.sh \
   --background --wait
 ```
 
@@ -39,8 +39,8 @@ bash data_quality/scripts/serve/serve_sglang.sh \
 ### 启动服务
 
 ```bash
-bash data_quality/scripts/serve/serve_sglang.sh \
-  data_quality/scripts/serve/models/<preset>.sh \
+bash scripts/serve/serve_sglang.sh \
+  scripts/serve/models/<preset>.sh \
   [选项] [-- <SGLang 额外参数>]
 ```
 
@@ -59,26 +59,39 @@ bash data_quality/scripts/serve/serve_sglang.sh \
 传递额外 SGLang 参数（放在 `--` 之后）：
 
 ```bash
-bash data_quality/scripts/serve/serve_sglang.sh \
-  data_quality/scripts/serve/models/qwen3-32b.sh \
+bash scripts/serve/serve_sglang.sh \
+  scripts/serve/models/qwen3-32b.sh \
   --wait -- --max-total-tokens 65536
 ```
 
 ### 停止服务
 
 ```bash
-bash data_quality/scripts/serve/stop_sglang.sh
+bash scripts/serve/stop_sglang.sh
 ```
 
 ## SLURM 用法
 
 ```bash
-mkdir -p data_quality/logs/serve
+mkdir -p logs/serve
 
-sbatch data_quality/scripts/serve/submit_sglang.sh \
-  data_quality/scripts/serve/models/qwen3-32b.sh \
+sbatch scripts/serve/submit_sglang.sh \
+  scripts/serve/models/qwen3-32b.sh \
   --wait
 ```
+
+如果只想把服务挂在 SLURM 上，等启动完成后手动发 `curl` 验证，可以加长启动等待时间：
+
+```bash
+ATTEMPTS=720 SLEEP_SECONDS=5 \
+CONTAINER_IMAGE=/lustre/projects/polyullm/container/lmsysorg+sglang+v0.5.9.sqsh \
+sbatch --gpus-per-node=4 \
+  scripts/serve/submit_sglang.sh \
+  scripts/serve/models/qwen3.6-27b.sh \
+  --wait
+```
+
+上面的 `ATTEMPTS=720 SLEEP_SECONDS=5` 表示最多等待 1 小时启动成功。服务启动成功后，作业会继续运行并持有 SGLang 进程，直到你 `scancel <job_id>`、服务退出或达到 Slurm walltime。
 
 服务跑在 SLURM 节点上时，需要把节点 IP 和端口写入 judge 配置文件：
 
@@ -92,6 +105,46 @@ client:
 
 节点 IP 可以从 SLURM job 日志或 `squeue` 命令中查到。
 
+### SLURM 一体化启动服务并打标
+
+如果希望在同一个 SLURM job 里先启动 SGLang，再直接运行
+`judge/run_judge.py`，使用一体化脚本：
+
+```bash
+sbatch scripts/serve/submit_judge_with_sglang.sh \
+  --model-config scripts/serve/models/qwen3-32b.sh \
+  --judge-config judge/configs/judge_api_all_metrics.yaml \
+  --input /work/projects/polyullm/shihao/agent/data/10_canonical/
+```
+
+这个脚本会：
+
+1. 在容器里调用 `serve_sglang.sh --background --wait` 启动服务。
+2. 设置 `MODEL=qwen3-32b`、`BASE_URL=http://127.0.0.1:31877/v1`、
+   `API_KEY=EMPTY`。
+3. 调用 `judge/run_judge.py` 连接本 job 内的 SGLang OpenAI 兼容接口。
+4. job 结束或失败时调用 `stop_sglang.sh` 清理后台服务。
+
+常用覆盖参数：
+
+```bash
+sbatch scripts/serve/submit_judge_with_sglang.sh \
+  --input /path/to/data \
+  --port 31877 \
+  --tp 2 \
+  --dp 1 \
+  --max-samples 1000
+```
+
+如需给 SGLang 追加额外启动参数，重复使用 `--sglang-arg`：
+
+```bash
+sbatch scripts/serve/submit_judge_with_sglang.sh \
+  --input /path/to/data \
+  --sglang-arg --max-total-tokens \
+  --sglang-arg 65536
+```
+
 ## 模型预设文件
 
 预设文件存放在 `models/*.sh`，每个文件对应一个模型配置。新增模型时复制 `models/template.sh` 修改即可。
@@ -100,9 +153,13 @@ client:
 
 | 文件 | 模型 | TP | 说明 |
 |------|------|----|------|
+| `qwen3.6-27b.sh` | Qwen3.6-27B | 4 | 4 卡张量并行，默认 32k 上下文 |
+| `qwen3-235b-a22b.sh` | Qwen3-235B-A22B | 8 | 8 卡张量并行，默认从 Hugging Face `Qwen/Qwen3-235B-A22B` 加载 |
+| `qwen3-30b-a3b-instruct-2507.sh` | Qwen3-30B-A3B-Instruct-2507 | 2 | 2 卡张量并行，默认从 Hugging Face `Qwen/Qwen3-30B-A3B-Instruct-2507` 加载 |
 | `qwen3-32b.sh` | Qwen3-32B | 2 | 正式打分用，需双卡 |
 | `qwen3-4b.sh` | Qwen3-4B | 1 | 单卡，基础版 |
 | `qwen3-4b-judge.sh` | Qwen3-4B (微调版) | 1 | 单卡，judge 微调 |
+| `qwen3-4b-instruct-2507.sh` | Qwen3-4B-Instruct-2507 | 8 | Instruct 模型，默认 TP=8、DP=8 |
 | `qwen3-4b-thinking.sh` | Qwen3-4B (thinking) | 1 | 单卡，thinking 模式 |
 | `template.sh` | — | — | 新预设的起点 |
 
@@ -117,6 +174,8 @@ client:
 | `DP` | `1` | data parallel |
 | `TOOL_CALL_PARSER` | `qwen` | Qwen 系列模型填 `qwen`，其余留空 |
 | `CONTEXT_LENGTH` | — | 最大上下文长度，不填则用模型默认 |
+| `ENABLE_FLASHINFER` | — | 设为 `true` 时追加 `--enable-flashinfer` |
+| `ENABLE_DP_ATTENTION` | — | 设为 `true` 时追加 `--enable-dp-attention` |
 
 所有变量均可通过环境变量覆盖，也可以通过命令行选项覆盖（命令行优先级最高）。
 

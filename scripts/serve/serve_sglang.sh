@@ -9,7 +9,7 @@ PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/../.." &>/dev/null && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  bash data_quality/scripts/serve/serve_sglang.sh <model_config.sh> [options] [-- extra_sglang_args...]
+  bash scripts/serve/serve_sglang.sh <model_config.sh> [options] [-- extra_sglang_args...]
 
 Options:
   --host HOST             Override HOST from config.
@@ -24,11 +24,11 @@ Options:
   -h, --help              Show this help.
 
 Examples:
-  bash data_quality/scripts/serve/serve_sglang.sh \
-    data_quality/scripts/serve/models/qwen3-4b-judge.sh
+  bash scripts/serve/serve_sglang.sh \
+    scripts/serve/models/qwen3-4b-judge.sh
 
-  bash data_quality/scripts/serve/serve_sglang.sh \
-    data_quality/scripts/serve/models/qwen3-4b-judge.sh --background --wait
+  bash scripts/serve/serve_sglang.sh \
+    scripts/serve/models/qwen3-4b-judge.sh --background --wait
 EOF
 }
 
@@ -124,6 +124,8 @@ done
 : "${WARMUPS:=3}"
 : "${MAX_RUNNING_REQUESTS:=16}"
 : "${CHUNKED_PREFILL_SIZE:=2048}"
+: "${ENABLE_FLASHINFER:=}"
+: "${ENABLE_DP_ATTENTION:=}"
 : "${LOG_DIR:=${PROJECT_DIR}/logs/serve}"
 : "${CACHE_DIR:=${PROJECT_DIR}/cache/serve}"
 
@@ -183,6 +185,12 @@ if [[ -n "${MEM_FRACTION_STATIC:-}" ]]; then
 fi
 if [[ -n "${LOG_LEVEL:-}" ]]; then
   LAUNCH_ARGS+=(--log-level "${LOG_LEVEL}")
+fi
+if [[ "${ENABLE_FLASHINFER}" == "true" || "${ENABLE_FLASHINFER}" == "1" ]]; then
+  LAUNCH_ARGS+=(--enable-flashinfer)
+fi
+if [[ "${ENABLE_DP_ATTENTION}" == "true" || "${ENABLE_DP_ATTENTION}" == "1" ]]; then
+  LAUNCH_ARGS+=(--enable-dp-attention)
 fi
 if [[ "${#EXTRA_ARGS[@]}" -gt 0 ]]; then
   LAUNCH_ARGS+=("${EXTRA_ARGS[@]}")

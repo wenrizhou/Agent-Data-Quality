@@ -7,8 +7,8 @@ PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/../.." &>/dev/null && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  bash data_quality/scripts/serve/stop_sglang.sh <model_config.sh> [options]
-  bash data_quality/scripts/serve/stop_sglang.sh --pid-file PATH [options]
+  bash scripts/serve/stop_sglang.sh <model_config.sh> [options]
+  bash scripts/serve/stop_sglang.sh --pid-file PATH [options]
 
 Options:
   --model-name NAME       Override MODEL_NAME from config.
@@ -21,11 +21,11 @@ Options:
   -h, --help              Show this help.
 
 Examples:
-  bash data_quality/scripts/serve/stop_sglang.sh \
-    data_quality/scripts/serve/models/qwen3-4b-thinking.sh
+  bash scripts/serve/stop_sglang.sh \
+    scripts/serve/models/qwen3-4b-thinking.sh
 
-  bash data_quality/scripts/serve/stop_sglang.sh \
-    data_quality/scripts/serve/models/qwen3-4b-thinking.sh --force
+  bash scripts/serve/stop_sglang.sh \
+    scripts/serve/models/qwen3-4b-thinking.sh --force
 EOF
 }
 
