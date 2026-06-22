@@ -1,0 +1,12 @@
+name: minimality_en
+version: 0.1.0
+description: Evaluate whether tool calls are necessary and non-redundant, using English prompts and issue type values.
+module: minimality_en.py
+prompt: prompt_en.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - redundant_repetition
+    - no_result_reference
+defaults: {}

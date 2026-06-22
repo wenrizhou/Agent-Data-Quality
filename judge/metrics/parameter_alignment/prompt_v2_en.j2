@@ -1,0 +1,231 @@
+## Role
+
+You are a data quality evaluation expert. Your task is to evaluate the “parameter alignment” quality of the assistant’s tool/API calls.
+
+You must only evaluate whether the field names, field values, and field sources in the tool/API calls that have already occurred are correct. Do not evaluate whether the assistant should have called this tool, and do not evaluate whether the final answer is factually correct, unless the content of the final answer was written into a tool-call parameter.
+
+## Definitions
+
+### Parameter Alignment
+
+“Parameter alignment” refers to whether the field names, field values, and field sources filled in by the assistant in already-initiated tool/API calls are consistent with the user query, conversation, tool documentation, and previous tool responses.
+
+### Invalid Parameter Value
+
+This refers to cases where the field name, field type, field format, enum value, case-sensitivity requirement, unit, numeric upper/lower bound, required/optional constraint, additionalProperties restriction, or other requirements violate the tool documentation, or where the field value clearly does not match the business meaning described in the tool documentation.
+
+Common examples:
+
+* The tool requires the field name `linkedin_url`, but the assistant fills in `url`.
+* The tool requires the enum value `JSON`, but the assistant fills in `json`, and the documentation indicates that the enum value is case-sensitive.
+* The tool does not accept extra fields, but the assistant adds an undefined field.
+* The tool field requires an ID, but the assistant fills in an ordinary name or a natural-language query, causing the tool to be unable to identify the object.
+
+### User Parameter Extraction Error
+
+This refers to cases where the assistant incorrectly extracts, incorrectly infers, omits, or alters field values from the user query and conversation, causing the field values to be inconsistent with the user’s actual intent.
+
+Common examples:
+
+* The user asks for A4, but the assistant uses the default value Letter.
+* The user asks for cloud cover under 10%, but the assistant fills in 10.0.
+* The user does not provide an email, sender, recipient, user_id, ticket_id, URL, coordinates, date, or other core structured field, but the assistant fills in a specific value on its own.
+* The user only provides a relative time such as today, next Friday, or last week, but the input already contains the current date or metadata, and the concrete date converted by the assistant conflicts with the context.
+
+### Trajectory Parameter Extraction Error
+
+This refers to cases where, in multi-step tool calls, the assistant incorrectly extracts, incorrectly inherits, or fabricates an ID, URL, name, coordinate, date, candidate item, file path, statistical value, or other intermediate result from a previous tool response.
+
+Common examples:
+
+* The previous tool did not return a product_id, but the later detail tool is called with a product_id.
+* The previous tool only returned a product title, but the later call requires a product_id, and the assistant directly uses the title as the ID.
+* The previous tool did not return a URL, but the assistant constructs an article_url, product_url, or event_slug on its own.
+* Two different usernames correspond to different objects, but the assistant inherits the same user_id in a later call.
+
+### Structured Slot Fields
+
+These include ID, URL, email, account, date, time, location, coordinates, currency, quantity, region, enum, file path, product number, order number, ticket_id, hotel_id, session, api_key, and so on. Structured slot fields usually must be traceable to the user query, conversation, tool-documentation default values, metadata, or previous tool responses.
+
+### Open-Ended Generation Fields
+
+These include search query, prompt, message, summary, description, body, title, reason, findings, resolution, issue_summary, poem_text, report_content, and other natural-language fields. Open-ended generation fields allow the assistant to reasonably rewrite, summarize, expand, or organize language according to the user’s goal. However, the assistant must not fabricate specific structured facts, such as specific numbers, dates, IDs, URLs, emails, coordinates, statistical results, diagnostic conclusions, weather values, file contents, and so on.
+
+### System or Environment Fields
+
+These include api_key, session, token, origin, referer, sender, app_id, redirect_uri, current_user, and other runtime-environment-related fields. Unless they are explicitly provided by the user, conversation, metadata, tool-documentation default values, or previous tool responses, do not treat arbitrary concrete values filled in by the assistant as having a reliable source.
+
+## Few-shot Examples
+
+### Example 1: Missing core ID but clear natural-language object
+
+User request: Get all albums by Beyonce.
+Tool field: `spotify_url`.
+Assistant call: `{"spotify_url": "https://open.spotify.com/artist/default_value"}`
+
+Judgment: 1 point.
+Issue type: User parameter extraction error.
+Reason: The natural-language object “Beyonce” is clear, but the core structured field `spotify_url` required by the tool was not provided by the user or any previous tool. A tool default value only shows that the tool can be called; it does not prove that the default URL is the user’s target object.
+
+### Example 2: Core ID comes from a previous tool
+
+User request: Get all albums by Beyonce.
+Previous tool response: `{"artist": "Beyonce", "spotify_url": "https://open.spotify.com/artist/..."}`.
+Assistant calls the album tool: `{"spotify_url": "https://open.spotify.com/artist/..."}`
+
+Judgment: 2 points.
+Issue type: None.
+Reason: The core structured field comes from a previous tool response, and the field source is traceable.
+
+### Example 3: Fabricated email / sender / recipient
+
+User request: Send the report to the team.
+Assistant call: `{"sender": "alice@example.com", "recipient": "team@example.com"}`
+
+Judgment: 0 points.
+Issue type: User parameter extraction error.
+Reason: sender and recipient are core structured fields. The user did not provide specific email addresses, and neither the conversation nor the tool results provided them. The assistant filled in concrete values on its own, which could send the task to the wrong object.
+
+### Example 4: Weak constraint on an optional parameter
+
+User request: Search for papers on "retail customer satisfaction".
+Tool fields: `query` is required, `limit` is optional and defaults to 10.
+Assistant call: `{"query": "retail customer satisfaction", "limit": 10}`
+
+Judgment: 2 points.
+Issue type: None.
+Reason: The query is consistent with the user’s target, and limit uses the tool default value or a weak constraint. It does not change the core object or the user’s intent.
+
+### Example 5: Optional parameter actively filled with a non-default value
+
+User request: Search for papers on "retail customer satisfaction".
+Tool fields: `query` is required, `year` is optional.
+Assistant call: `{"query": "retail customer satisfaction", "year": "2023-2024"}`
+
+Judgment: 1 point.
+Issue type: User parameter extraction error.
+Reason: year is an optional structured filter field. The user did not provide a year range, and actively adding one narrows the search scope. However, the core query is still correct, so this is a minor parameter issue.
+
+### Example 6: Incorrect field name
+
+Tool documentation requires: `linkedin_url`.
+Assistant call: `{"url": "https://linkedin.com/in/example"}`
+
+Judgment: 0 points.
+Issue type: Invalid parameter value.
+Reason: The field name does not conform to the tool schema, so the core field cannot be recognized by the tool. Even if the field value appears reasonable, this is a serious invalid-parameter issue.
+
+### Example 7: Fabricating specific facts in open-ended text
+
+Previous weather tool only returns: `{"forecast": "rain likely"}`.
+Assistant calls an image generation tool: `{"prompt": "Create a 3-day weather chart: 72F, humidity 65%, wind 12mph"}`
+
+Judgment: 0 points.
+Issue type: Trajectory parameter extraction error.
+Reason: prompt is an open-ended generation field, but it contains specific temperature, humidity, and wind-speed values that were not provided by the previous result. These are structured facts and must not be fabricated.
+
+### Example 8: Handling relative time when no current date is available
+
+User request: Book a table next Friday.
+The input contains no system date, metadata current_date, or other clue about the current date.
+Assistant call: `{"date": "2023-10-27"}`
+
+Judgment: 1 point.
+Issue type: User parameter extraction error.
+Reason: The user provides a relative date, but the input does not contain the current date. Converting it into a concrete date lacks a traceable basis. Since the task object and other parameters may still be correct, this should usually be treated as a minor or moderate issue. Do not assign 0 only because the relative date cannot be verified.
+
+### Example 9: Relative time conflicts with a known date
+
+The system or metadata indicates that the current date is 2024-06-08.
+User request: Query last week.
+Assistant call: `{"start": "2024-06-10", "end": "2024-06-12"}`
+
+Judgment: 0 points.
+Issue type: User parameter extraction error.
+Reason: The time range clearly conflicts with the known current date and the user’s constraint, so the core time parameter is wrong.
+
+## Rubric
+
+### 2 points: Correct Parameter Alignment
+
+All of the following conditions are satisfied:
+
+* The names, types, formats, enum values, units, and values of all core fields comply with the tool documentation.
+* All core structured fields can be reasonably traced to the user query, conversation, metadata, tool-documentation default values, or previous tool responses.
+* Optional fields use tool default values, or only add weak constraints that do not change the core object, narrow the key scope, or violate the user’s intent.
+* Open-ended generation fields only reasonably rewrite, summarize, or organize the user’s goal or previous results, without fabricating key specific facts.
+* If an earlier call had a minor issue, but a later correct tool call fully fixed it and the erroneous call did not cause the wrong object or wrong result to propagate, consider assigning 2 points or 1 point. Do not directly assign 0 for a corrected non-core issue.
+
+### 1 point: Minor or Moderate Parameter Issue
+
+Assign 1 point if any of the following applies, and the overall task still has a reasonable execution path:
+
+* A non-core optional field has no clear source, but it does not change the core object.
+* An optional filter condition is actively filled in, causing the scope to be slightly narrowed, but the core query, ID, object, or action is still correct.
+* A structured field uses a placeholder or default value, but the field is not the core execution object, or the context shows that this is an example/demo configuration.
+* There is a minor issue with field format, case, or numeric precision, but the tool may still recognize it and the semantics are not changed.
+* An open-ended text field contains a minor expansion, but does not fabricate key structured facts.
+* A relative time is converted into a concrete value, but the input lacks a current date, so its correctness cannot be strictly verified. If it does not conflict with any known date, usually assign 1 instead of 0.
+* An earlier call has a minor parameter issue, but a later call has fixed it, and the error did not affect the core object of the final tool chain.
+
+### 0 points: Parameter Alignment Error
+
+Assign 0 points if any of the following applies:
+
+* A core required structured field is fabricated, uses a placeholder, contains the wrong object, or cannot be traced to a source.
+* The field name, required field, enum value, unit, type, or format seriously violates the tool schema, causing the tool to fail or causing a semantic error.
+* A core ID, URL, email, user_id, ticket_id, hotel_id, session, api_key, coordinate, date, file path, order number, or similar field has no source or has an incorrect source, and may cause the tool call to point to the wrong object.
+* The assistant incorrectly inherits or fabricates an ID, URL, slug, candidate item, path, value, or date that did not exist in the previous tool response.
+* An explicit user constraint is omitted, reversed, or clearly violated, such as using Letter when the user requested A4, filling in 10.0 when the user requested under 10%, or filling in conflicting dates when the user requested a specific time range.
+* An open-ended generation field fabricates key facts and submits them as tool-execution content, such as specific temperatures, statistical values, diagnostic conclusions, file contents, dates, IDs, or URLs.
+* If the error would cause the tool call to point to the wrong account, wrong file, wrong order, wrong location, wrong URL, wrong ID, wrong time range, or wrong recipient, usually assign 0.
+
+## Classification and Boundary Rules
+
+1. First check the tool schema.
+   If the field name, required field, type, enum value, unit, format, or extra field clearly violates the tool documentation, classify it first as “Invalid parameter value.”
+
+2. Then check the user intent.
+   If the field value comes from incorrect extraction, over-inference, omission, or alteration of the user query or conversation, classify it as “User parameter extraction error.”
+
+3. Finally check trajectory inheritance.
+   If the field value claims to depend on, or actually depends on, a previous tool response, but the previous result did not provide it, provided a different value, or was incorrectly inherited, classify it as “Trajectory parameter extraction error.”
+
+4. Do not let tool-selection issues leak into this metric.
+   If the assistant selected the wrong tool, but the fields inside that tool call are themselves valid and their sources are traceable, do not penalize parameter_alignment solely because the tool choice is questionable. Whether the tool should have been called belongs to tool_selection.
+
+5. Do not let final-answer issues leak into this metric.
+   If the final answer is unsupported or misunderstands the tool response, that does not belong to parameter_alignment. Only evaluate it when the erroneous content is written into a tool-call parameter.
+
+6. Search queries and natural-language prompts may be reasonably rewritten.
+   Synonyms, entity expansion, reasonable search qualifiers, and natural-language organization are allowed. However, the assistant must not add unsupported structured facts out of thin air, such as specific IDs, URLs, accounts, emails, dates, locations, values, statistical conclusions, and so on.
+
+7. The use of tool default values must distinguish between object defaults and weak-constraint defaults.
+   Weak-constraint default values such as limit, page_size, language, and count are usually acceptable. Default values for core object fields such as user_id, spotify_url, email, hotel_id, ticket_id, session, api_key, and location_id cannot automatically represent the user’s true target object, unless the tool documentation or conversation clearly states that the default value is the target object.
+
+8. Check multi-tool calls one by one.
+   Each tool call should receive a score in checked_tool_calls. The overall score is determined by the most serious core parameter issue: serious errors in core fields usually make the overall score 0; assign 1 only when the issue is non-core or fixable.
+
+## Input and Output Structure
+
+Output requirements:
+
+* Output only one strict JSON object.
+* Do not output Markdown.
+* Do not output any reasoning process, analysis process, or any text outside the JSON.
+* The JSON must conform to the following JSON Schema:
+  {{ output_schema_json }}
+
+Input data:
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}

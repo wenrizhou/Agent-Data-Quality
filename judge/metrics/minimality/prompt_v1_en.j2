@@ -1,0 +1,79 @@
+The following metric definition must be strictly followed:
+
+You are a data quality evaluation expert. Your task is to evaluate whether the assistant's tool-call trajectory satisfies "minimality."
+
+"Minimality" means whether the assistant avoided redundant, repeated, mergeable, or unrelated tool calls while handling the user query and conversation.
+
+This metric evaluates only the necessity and redundancy of tool calls. It does not evaluate whether the final answer is correct, complete, well-supported, or well-written.
+
+Please determine whether the tool-call trajectory has any of the following issues:
+
+1. Redundant repetition (`redundant_repetition`)
+   This means the assistant made tool calls that were clearly repeated, mergeable, unrelated to the user request, or unnecessary after the same information had already been obtained and remained available in the conversation.
+
+2. No result reference (`no_result_reference`)
+   This issue type is kept for schema compatibility. Do not use it merely because the assistant did not provide a final answer, or because the final answer did not explicitly quote, cite, mention, or summarize a tool response. Under this metric, lack of final-answer usage is out of scope unless the tool call itself was already clearly redundant or unrelated; in that case, classify the issue as `redundant_repetition`.
+
+Out-of-scope rules:
+
+The following issues must not lower the minimality score:
+
+1. Missing final answer or weak final-answer reference.
+   Do not penalize the trajectory merely because there is no final assistant answer after the tool call, or because the final answer does not explicitly reference, cite, or quote the tool response. If the tool call itself was necessary or reasonable when it was made, score minimality based on the tool-call trajectory only.
+
+2. Directly answerable tasks.
+   Do not penalize tool use merely because the task could have been answered from common knowledge, simple mental calculation, user-provided data, or direct reasoning without a tool. If the called tool is directionally relevant to the task and is not repeated, unrelated, or clearly wasteful, treat the call as minimal.
+
+3. User-specified steps.
+   If the user explicitly asks the assistant to perform a step or call a tool-like operation, treat following that step as necessary. Do not penalize the assistant because the step could have been skipped or solved more directly.
+
+4. Failed calls, exploratory calls, and error recovery.
+   Do not penalize a failed tool call, exploratory tool call, or corrected retry merely because it failed or used an incorrect parameter. Parameter names, parameter values, parameter provenance, and schema alignment are not evaluated by this metric. They belong to other metrics.
+
+5. Auxiliary verification and supplementation.
+   Tool calls used for confirmation, cross-checking, disambiguation, pagination, supplementing missing context, broadening context, or explaining a result are generally necessary. Do not penalize them merely because they are not the only source used in the final answer.
+
+6. Other metric domains.
+   Do not evaluate tool selection quality, parameter alignment, factual correctness, hallucination, safety, user requirement fulfillment, or answer completeness under this metric. If the tool count and sequence are not redundant, do not lower the minimality score for those other problems.
+
+Scoring criteria:
+
+* 2 points: Minimal
+  The tool-call trajectory is concise and reasonable. The assistant does not make clearly repeated, unrelated, mergeable, or wasteful tool calls. A trajectory can receive 2 points even if the user request was directly answerable without tools, even if a tool call failed and was reasonably recovered from, and even if there is no final answer after the tool call.
+
+* 1 point: Minor redundancy
+  The trajectory contains a small number of redundant, repeated, mergeable, or weakly related tool calls, but the main tool calls are still necessary or reasonable. In particular, if the assistant calls a tool again to retrieve information that was already available and sufficient in the conversation, usually assign 1 point rather than 0, unless the repeated or unrelated calls are excessive.
+
+* 0 points: Not minimal
+  The trajectory contains many clearly redundant, repeated, mergeable, or unrelated tool calls, or the redundant calls dominate the trajectory. Use 0 only when the redundancy is substantial or severe. Do not assign 0 merely because the final answer is missing, incomplete, unsupported, or does not reference tool responses.
+
+Important notes:
+
+1. Only evaluate minimality. Do not evaluate whether the query, conversation, tool parameters, tool results, or final answer are truthful, safe, correct, complete, or aligned with other metrics.
+2. Do not deduct points merely because the task itself requires multiple tools. Multiple tool calls can be necessary as long as they serve different subtasks or reasonable steps in a tool chain.
+3. Do not deduct points merely because a single relevant tool was used for a task that could have been solved without a tool.
+4. If a later tool call repeats information already available in the conversation and does not add meaningful new information, this is usually minor redundancy and should usually receive 1 point.
+5. If a tool call fails and the assistant reasonably switches to another tool, retries with corrected parameters, or continues based on the failure, do not classify the failed call as redundant.
+6. Be cautious when judging whether a tool call is "mergeable" or "unrelated." Some extra operations may have an implicit connection, such as verification, disambiguation, contextual supplementation, user-requested step completion, or prerequisite completion.
+
+Output requirements:
+
+* Output only one strict JSON object.
+* Do not output Markdown.
+* Do not output any reasoning process, analysis process, or any text outside the JSON.
+* The JSON must conform to the following JSON Schema:
+  {{ output_schema_json }}
+
+Input data:
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}

@@ -1,0 +1,13 @@
+name: specificity_en
+version: 0.1.0
+description: Evaluate whether the sample's user requests are specific enough, using English issue type values.
+prompt: prompt_en.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - unclear_intent
+    - missing_intent
+    - unclear_object
+    - missing_object
+defaults: {}

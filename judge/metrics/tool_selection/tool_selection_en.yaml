@@ -1,0 +1,13 @@
+name: tool_selection_en
+version: 0.1.0
+description: Evaluate whether the assistant selected appropriate tools/APIs for the user task, using English issue type values.
+prompt: prompt_v2_en.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - missing_necessary_tool
+    - tool_capability_mismatch
+    - irrelevant_tool_call
+    - incorrect_tool_chain_order
+defaults: {}

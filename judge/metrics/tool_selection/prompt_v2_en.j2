@@ -1,0 +1,76 @@
+The following metric definition must be strictly followed:
+
+You are a data quality evaluation expert. Your task is to evaluate the quality of “tool selection” in the tool-call trajectory.
+
+“Tool selection” refers to whether the assistant selected appropriate tools/APIs for the tasks specified in the user query and conversation, and whether the assistant omitted necessary tools, called irrelevant tools, or organized the tool chain in an incorrect order.
+
+Only evaluate which tools/APIs were selected. Do not evaluate the details of the fields filled in within an individual tool call.
+
+Please determine whether any of the following issues exist in the tool selection:
+
+1. Missing necessary tool
+   This means that the user’s task requires a certain type of tool/API to be completed, and the currently available tool set contains a corresponding tool or an alternative tool with equivalent capabilities, but the assistant did not call it.
+
+Note: If the currently available tool set does not contain any tool capable of fulfilling the user’s core request, and the assistant correctly recognizes the capability limitation, does not call irrelevant tools, and does not fabricate tool capabilities, this does not constitute a missing necessary tool and should receive a score of 2.
+
+2. Tool capability mismatch
+   This means that the assistant called a tool/API whose capabilities clearly do not match the user’s core task, such as using a weather tool to look up stocks, using a music-chart tool to find restaurants, using a place-search tool to query user information, or using an API from the wrong domain to handle the user’s request.
+
+Note: This metric does not require the judge to determine whether the fields returned by a relevant tool are sufficient to fully cover the user’s request, nor does it evaluate whether the tool’s actual returned content is complete. As long as the tool’s name, description, or schema indicates that its general capability matches the user’s core task, do not deduct points from tool_selection because the returned fields provide insufficient coverage, the results are incomplete, the temporal granularity is insufficient, or the tool lacks a specialized subfield. These are issues related to tool capability limitations, result sufficiency, or subsequent response quality, not this metric.
+
+3. Irrelevant tool call
+   This means that the assistant called a tool/API that has no reasonable relationship to the user’s task, the conversation context, or any previous tool response.
+
+4. Incorrect tool-chain order
+   This means that the order of tool calls in a multi-step task is unreasonable, such as directly calling a detail tool when an ID, URL, or candidate item must first be obtained through a search tool, or directly sending or summarizing file content when the file must first be read.
+
+Scoring criteria:
+
+* 2 points: Correct tool selection.
+  The assistant called the tools required to complete the user’s task, or tools with equivalent capabilities; did not clearly omit any core tool currently available; did not call any clearly irrelevant tool; and organized multi-step tool calls in a reasonable order.
+  If the available tool set contains no tool capable of fulfilling the user’s core request, and the assistant correctly recognizes the capability limitation, does not call irrelevant tools, and does not fabricate tool capabilities, assign 2 points rather than 0.
+
+* 1 point: Minor tool-selection issue.
+  There are minor redundant tool calls, a small number of irrelevant tool calls that do not affect the core task, a suboptimal tool that can still complete the task, or an omitted non-core auxiliary tool. The overall task still has a reasonable completion path.
+  If the assistant has not completed the subsequent tool calls in the current turn, but has already called a prerequisite tool appropriate for the current step and the remaining tool chain can be continued in the next turn, assign 1 point rather than 0.
+
+* 0 points: Incorrect tool selection.
+  A currently available core tool is missing, a clearly irrelevant tool is used to perform the core task, or the tool-chain order is seriously incorrect, causing the user’s task to be impossible to complete correctly or to clearly deviate from the user’s request.
+  Only classify an issue as a missing necessary tool when the available tool set contains a tool capable of fulfilling the core request, or a tool with equivalent capabilities, but the assistant did not call it.
+
+Important notes:
+
+1. Do not deduct points directly because of details in the fields filled in within a tool call. If the tool type and its capabilities are appropriate, the tool selection should generally still be considered correct under this metric.
+2. If a tool call fails, do not classify the tool selection as incorrect solely because of the failure. It belongs to this metric only when the failure reveals that a prerequisite tool was missing or that the tool-chain order was incorrect.
+3. If the name of the tool used by the assistant does not exactly match the user’s wording, but the tool description shows that it is capable of completing the task, the tool selection should be considered correct.
+4. If multiple interchangeable tools are available, do not deduct points for failing to choose the “best” tool, as long as the selected tool has equivalent capabilities.
+5. If the user’s task does not require a tool, the assistant’s failure to call a tool should not be classified as a missing necessary tool.
+6. If the user’s task requires a tool, but the currently available tool set contains no tool capable of fulfilling the user’s core request, and the assistant correctly explains the capability limitation, does not call irrelevant tools, and does not fabricate tool capabilities, assign 2 points.
+7. If the currently available tool set contains a tool that can clearly fulfill the user’s core request, but the assistant does not call it at all and provides no executable alternative, classify this as a missing necessary tool.
+8. If a tool call appears irrelevant but is used to obtain information required by a later tool, verify a prerequisite, find candidate items, or read contextual information, it may be considered a reasonable part of the tool chain.
+9. If the error occurs only in the selection of a non-core auxiliary tool and the core task can still be completed, consider assigning 1 point.
+10. If the assistant has already called the prerequisite tool required for the current step, but has not completed the entire subsequent tool chain within the current turn and has not incorrectly used any irrelevant tool, assign 1 point.
+11. Do not evaluate the details of whether the tool’s capabilities fully cover the core request. This metric only determines whether the assistant selected a directionally appropriate tool from the available tools. It does not determine whether the tool’s returned fields are sufficiently detailed, whether its results are complete, or whether it can fully satisfy the user’s final request.
+12. If the core tool is clearly incorrect, such as being from a completely unrelated domain or having entirely unrelated capabilities, assign 0 even if the call itself can be executed.
+
+Output requirements:
+
+* Output only one strict JSON object.
+* Do not output Markdown.
+* Do not output any reasoning process, analysis process, or any text outside the JSON.
+* The JSON must conform to the following JSON Schema:
+  {{ output_schema_json }}
+
+Input data:
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}

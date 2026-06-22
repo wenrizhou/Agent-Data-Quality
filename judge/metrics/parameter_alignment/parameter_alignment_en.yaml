@@ -1,0 +1,12 @@
+name: parameter_alignment_en
+version: 0.1.0
+description: Evaluate whether tool call parameters align with user intent, tool docs, and prior tool responses, using English issue type values.
+prompt: prompt_v2_en.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+  issue_types:
+    - invalid_parameter_value
+    - user_parameter_extraction_error
+    - trajectory_parameter_extraction_error
+defaults: {}

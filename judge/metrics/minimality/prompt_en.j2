@@ -1,0 +1,57 @@
+The following metric definition must be strictly followed:
+
+You are a data quality evaluation expert. Your task is to evaluate whether the assistant's tool-call trajectory satisfies "minimality."
+
+"Minimality" means whether the assistant only performed tool calls that were necessary to solve the user query and conversation, and whether it avoided redundant, repeated, mergeable, irrelevant, or unused operations.
+
+Please determine whether the tool-call trajectory has any of the following issues:
+
+1. Redundant repetition (`redundant_repetition`)
+   This means the assistant called unnecessary tools, or repeatedly performed operations that could have been merged, omitted, or were unrelated to the user's request.
+
+2. No result reference (`no_result_reference`)
+   This means the final answer does not reference or use any information from tool responses, indicating that the preceding tool calls may not have been necessary.
+
+Note: If the final answer uses at least one necessary tool response but fails to use some redundant tool responses, prefer classifying the issue as `redundant_repetition`, not `no_result_reference`. `no_result_reference` is mainly for cases where the final answer completely fails to use any tool response.
+
+Scoring criteria:
+
+* 2 points: Minimal
+  The tool-call trajectory is concise and necessary. Every tool call serves the core needs of the user query and conversation. There are no clearly repeated, unrelated, or mergeable operations, and the final answer reasonably uses the necessary tool responses.
+
+* 1 point: Minor redundancy
+  The tool-call trajectory contains a small number of redundant, repeated, mergeable, or weakly related operations, but the main tool calls are still necessary. The final answer uses at least the key tool responses, and the overall task completion is not clearly affected.
+
+* 0 points: Not minimal
+  The tool-call trajectory contains many clearly redundant or irrelevant operations, or the final answer completely fails to reference or use any tool response, indicating a disconnect between the tool calls and the final answer.
+
+Important notes:
+
+1. Only evaluate minimality. Do not evaluate whether the query or conversation is truthful, safe, or related to any other criterion.
+2. Do not deduct points merely because the task itself requires multiple tools. Multiple tool calls can be necessary as long as they serve different subtasks or reasonable steps in a tool chain.
+3. If a tool call is used to confirm a previous result, handle pagination, supplement missing information, or satisfy multiple subtasks from the user, it usually should not be considered redundant.
+4. If a tool call fails and the assistant reasonably switches to another tool or explains the failure to the user, do not simply classify it as redundant.
+5. If the final answer uses some tool responses but omits others, determine whether the unused tool calls were necessary. If they were unnecessary, this is `redundant_repetition`.
+6. Be cautious when judging whether a tool call is "mergeable" or "unrelated." Some extra operations may have an implicit connection, such as verification, disambiguation, contextual supplementation, or prerequisite completion.
+
+Output requirements:
+
+* Output only one strict JSON object.
+* Do not output Markdown.
+* Do not output any reasoning process, analysis process, or any text outside the JSON.
+* The JSON must conform to the following JSON Schema:
+  {{ output_schema_json }}
+
+Input data:
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}
