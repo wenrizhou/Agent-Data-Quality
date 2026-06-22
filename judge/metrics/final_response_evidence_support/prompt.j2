@@ -1,17 +1,9 @@
-以下是指标定义，必须严格遵守：
-
-你是一名数据质量评估专家。你的任务是评估 assistant 最后一轮 response 的“最终回答证据支持性（Final Response Evidence Support）”。
+指标：最终回答证据支持性（Final Response Evidence Support）
 
 定义：
 该指标用于评价 assistant 最后一轮 response 中的事实性声明、任务完成声明、结果总结和关键结论，是否能够被 user message、conversation context、tool call arguments、tool call results 或环境最终状态支持。
 
-可用证据只包括输入数据中明确提供的内容：
-- user message 和 conversation context：来自 query 与 conversations。
-- tool call arguments 和 tool call results：来自 conversations 中的 assistant tool call、tool/function message 或等价字段。
-- 工具定义与能力边界：来自 tools。
-- 环境最终状态、运行元数据或原始样本字段：来自 metadata 与 raw_record。
-
-请重点检查：
+打分时，请重点检查：
 1. final response 是否正确反映了 tool 返回结果；
 2. 是否存在 tool 失败但 final response 声称成功的情况；
 3. 是否存在 tool 没有返回相关信息，但 final response 编造事实、数量、时间、对象、状态或结论的情况；
@@ -20,29 +12,10 @@
 6. 如果证据不足，assistant 是否正确表达了不确定性，而不是给出确定性结论；
 7. 对用户决策或任务结果有关键影响的 claim，应比边缘性措辞更重要。
 
-评分方法：
+打分方法：
 请根据 final response 与可用证据之间的支持程度，对该指标打 0、1、2 分。评分时不需要机械统计所有 claim，而应综合考虑 unsupported claim 的数量、严重程度、是否影响核心任务、是否与 tool result 直接矛盾，以及是否会误导用户。
 
-- 2 分：final response 中影响用户理解和决策的事实性声明、任务完成声明、结果总结和关键结论，均能从可用证据中得到支持；没有关键矛盾或无证据扩展。轻微措辞概括但不改变含义时仍可判 2。
-- 1 分：final response 整体大体受支持，但存在少量轻微无证据扩展、过度总结、不够严谨的确定性表达，或边缘 claim 与证据不完全匹配；这些问题不明显改变核心任务结果，也不太会误导用户。
-- 0 分：final response 中存在核心 unsupported claim、与 tool result/user/context 直接矛盾的 claim、tool 失败却声称成功、无证据编造关键事实/数量/时间/对象/状态/结论，或把不确定结果说成确定结论，足以误导用户或改变任务结论。
-
-注意事项：
-1. 只评价 assistant 最后一轮面向用户的 response；不要因为中间推理、工具选择或参数填写本身扣分，除非 final response 错误使用了这些结果。
-2. 如果最后一轮 assistant message 只是工具调用而没有面向用户的 final response，应按证据不足处理，并在 reason 中说明。
-3. 不要用模型常识、外部知识或未出现在输入中的事实补充证据。
-4. 如果 tool result 本身有错误或不完整，只检查 final response 是否忠实反映了可用 tool result；不要独立判断世界事实。
-5. 如果 final response 明确表达“不确定”“无法确认”“未能完成”“工具失败”等限制，且这种表达与证据一致，不应因任务未完成本身扣证据支持性分。
-6. unsupported_or_contradicted_claims 只列出关键内容；如果不存在，返回空数组。
-
-输出要求：
-- 只输出一个严格 JSON object。
-- 不要输出 Markdown。
-- 不要输出推理过程、分析过程或 JSON 之外的任何文本。
-- JSON 必须符合以下 JSON Schema：
-{{ output_schema_json }}
-
-字段说明：
+输出时请给出：
 - score: 0 / 1 / 2
 - reason: 简要说明为什么给这个分数
 - unsupported_or_contradicted_claims: 如果存在，请列出 final response 中未被支持或与证据矛盾的关键内容
@@ -61,6 +34,3 @@ tools:
 
 metadata:
 {{ metadata_json }}
-
-raw_record:
-{{ raw_json }}

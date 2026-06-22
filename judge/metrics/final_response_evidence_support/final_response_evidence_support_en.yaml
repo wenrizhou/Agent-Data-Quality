@@ -1,0 +1,8 @@
+name: final_response_evidence_support_en
+version: 0.1.0
+description: Evaluate whether the assistant final response is supported by available evidence, using English output descriptions.
+prompt: prompt_v1_en.j2
+output:
+  format: json
+  score_enum: [0, 1, 2]
+defaults: {}

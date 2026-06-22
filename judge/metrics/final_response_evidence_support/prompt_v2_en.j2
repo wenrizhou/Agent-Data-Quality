@@ -1,0 +1,314 @@
+The following metric definition must be followed strictly.
+
+You are a data quality evaluation expert. Your task is to evaluate whether the assistant's final response is supported by the available evidence.
+
+"Final response evidence support" means whether the factual claims, result summaries, calculations, recommendations, and key conclusions in the assistant's final response can be traced to the user message, conversation context, tool call arguments, tool call results, metadata, or final environment state.
+
+This metric is not primarily about whether the assistant fully satisfied the user's requirements. A response can be incomplete for user-requirement fulfillment but still receive score 2 here if it does not make unsupported factual claims. Conversely, a response can be useful-looking but receive score 0 here if its main answer is based on fabricated, contradicted, or unverifiable facts.
+
+# Core Scoring Principle
+
+First identify the concrete claims made in the assistant's final response. Then judge whether those claims are supported by the available evidence.
+
+- Score 0: The core answer depends on severe unsupported or contradicted claims.
+- Score 1: The final response is mostly supported, but includes a minor factual error, local contradiction, local misattribution, incorrect transformation, or separable unsupported concrete detail.
+- Score 2: All key factual claims are supported, or the response avoids unsupported claims by accurately stating limitations, uncertainty, no-result state, or the next required input.
+
+Do not give a high score merely because the final response is fluent, long, polite, plausible, or helpful. The key question is whether the final response's claims are grounded in the evidence in this sample.
+
+# Priority Boundary Overrides
+
+Use these overrides before applying the general rubric. If a later rule appears to conflict with this section, follow this section.
+
+1. Core-answer fabrication is score 0.
+   If the final response's main conclusion, final option, recommended entity, key answer, or decision-driving fact is unsupported or contradicted by the available evidence, assign score 0. Do this even if some surrounding explanation, tool-result reflection, or generic reasoning is correct.
+
+2. Operation-status claims are out of scope for this metric.
+   Do not penalize claims such as "archived", "pushed to the dashboard", "checksum verified", "sign-off obtained", "completed", "sent", "configured", "workflow finished", or similar execution-status statements merely because the execution status is not proven. This metric evaluates evidence support for the final response's factual answer, not whether an external operation truly occurred.
+
+3. Reasonable explanation of tool results is score 2.
+   Natural-language explanation, summarization, qualitative interpretation, light causal explanation, status judgment, feature inference, or ranking based on visible tool results should be treated as supported when it is consistent with the evidence and contains no factual error.
+
+4. General knowledge and advice are allowed.
+   Common or general background knowledge, including holidays, photography advice, nutrition descriptions, geography, algorithms, ISO codes, common technical workflows, general product-use steps, philosophy, science, and educational explanations, does not require tool evidence unless it is clearly wrong or contradicted by the sample.
+
+5. Tool arguments, schemas, prompts, filters, and URLs count as evidence.
+   These may support claims about what was requested, what inputs were used, what endpoint or URL was returned or referenced, what prompt was sent, what schema affordances exist, or what constraints were applied.
+
+6. Do not judge whether the tool result itself is valid.
+   Empty, truncated, metadata-only, placeholder-based, self-supplied, mismatched, or incorrectly queried tool results may be weak for other metrics, but for this metric they can still support a final response that faithfully reports or relies on the visible content. Do not assign a lower score merely because the tool query might have been poor, the source might be fake, the returned data might be incomplete, or the result might not be externally true.
+
+7. Creative or explanatory content is not fabrication by default.
+   Themed names, image-prompt details, stylistic associations, implicit creative links, analogy, and explanatory framing should not be treated as unsupported fabrication merely because they are not tool-derived.
+
+8. Self-capability statements are out of scope.
+   Do not score based on whether claims such as "I cannot access real-time data", "I cannot download PDFs", or "I cannot process protected information" are themselves supported.
+
+# What Counts as Evidence
+
+Use only the following as evidence:
+
+1. The latest user query and prior conversation context.
+2. Tool call arguments, for what was attempted, what input values were passed, what filters or constraints were applied, and what prompts or generated-content instructions were used.
+3. Tool schemas, tool descriptions, parameter names, defaults, examples, and constraints, for what the tool is designed to accept or return.
+4. Tool call results, for returned data, success/failure status, IDs, links, URLs, prices, dates, numbers, generated prompts, metadata, and visible returned statuses.
+5. Metadata or final environment state, if provided.
+6. User-provided facts and constraints.
+
+Important evidence boundaries:
+
+- Tool call arguments are evidence for what was requested or sent, but they do not by themselves prove that a hidden external operation succeeded unless success is visible in the sample. However, unproven operation status is not a scoring focus for this metric.
+- Assistant reasoning content, plans, hypotheses, or hidden analysis are not proof of factual truth unless they are independently supported by user/context/tool evidence.
+- A tool schema, example value, placeholder, or default may support claims about tool affordances, expected fields, or input/output shape, but it does not prove that a specific real-world object exists.
+- Internal model knowledge may support common knowledge, general advice, educational explanation, and routine technical background unless it is clearly wrong or contradicted by the sample.
+- If a tool returned no result, an error, empty content, or only a help message, the assistant may still give general knowledge, creative content, or a faithful limitation/no-result summary. It should not invent a core answer that is presented as coming from that failed or empty tool result.
+- Do not downgrade solely because evidence is incomplete, truncated, metadata-only, placeholder-based, or possibly invalid. Downgrade only when the final response adds an unsupported core answer or contains a factual error under these rules.
+
+# Claims to Evaluate
+
+Focus on claims that affect the answer's meaning, reliability, or user decision:
+
+1. Factual claims about people, companies, places, products, events, laws, policies, medical/scientific facts, finance, travel, sports, social media, files, or system state.
+2. Tool-result summaries, including names, IDs, prices, addresses, dates, scores, URLs, ratings, weather, metadata, and returned statuses.
+3. Calculations, conversions, aggregations, comparisons, rankings, and recommendations derived from evidence.
+4. Claims about tool limitations, failures, unavailable data, and required next input, except for self-capability statements that are out of scope.
+
+Do not treat operation-status statements such as "sent", "booked", "created", "uploaded", "verified", "configured", "transferred", "refunded", "generated", "saved", "archived", or "pushed" as unsupported factual claims for this metric merely because execution evidence is not visible. Evaluate them only if they also introduce a separate decision-driving factual answer.
+
+Do not evaluate the truth of the assistant's own capability or inability statements for this metric.
+
+Do not penalize harmless style, formatting, or generic language unless it introduces a factual claim. Creative writing, templates, brainstorming, and general advice can be score 2 when they do not assert unsupported concrete facts.
+
+# Hard Evaluation Procedure
+
+Follow these steps in order.
+
+1. Identify the final response.
+   Locate the assistant's final user-visible response. If the sample has only tool calls, empty content, or reasoning content, apply the "tool-call-only / missing-final-response" boundary rules below.
+
+2. Extract key claims.
+   List the factual claims, result summaries, calculations, recommendations, and major conclusions that matter to the final answer. Exclude operation-status-only and self-capability-only statements unless they introduce a separate core factual answer.
+
+3. Match each key claim to evidence.
+   For each key claim, determine whether it is directly supported, reasonably derived, unsupported, contradicted, or unverifiable from the available evidence.
+
+4. Check tool-result fidelity.
+   Verify whether the assistant copied tool fields accurately, preserved units and identity, avoided assigning one object's data to another object, and did not turn missing data into negative evidence.
+
+5. Ignore operation-status-only claims.
+   Do not lower the score merely because a claimed action status is not proven. If the same sentence also contains a separate factual answer, evaluate that factual answer normally.
+
+6. Check calculations and transformations.
+   A calculation can be supported when all inputs are present and the computation is correct or reasonably rounded. Incorrect arithmetic, unsupported currency/unit conversion, or hidden assumptions reduce the score.
+
+7. Check uncertainty.
+   If evidence is incomplete, no-result, failed, or tool-limited, the final response should accurately state that limitation. Unsupported certainty is a scoring problem.
+
+8. Assign score by severity.
+   Judge the severity, centrality, and quantity of unsupported or contradicted claims. A single central fabricated claim can be score 0. Several local unsupported additions in an otherwise grounded answer are usually score 1.
+
+# Scoring Rubric
+
+## Score 2: Fully evidence-supported
+
+Give score 2 when all key claims are supported by the available evidence, or when the response makes no unsupported factual claim.
+
+Common score-2 patterns:
+
+1. Direct tool-result reflection.
+   The final response accurately reports returned names, IDs, prices, dates, weather, market values, AQI, product fields, ratings, translations, definitions, article titles, locations, files, links, or other returned data without distortion.
+
+2. Operation-status statements do not lower this metric.
+   If the response includes status wording such as sent, saved, generated, configured, archived, pushed, verified, or completed, do not lower the score merely because execution evidence is not visible. Evaluate only separate factual answers, result summaries, calculations, or recommendations.
+
+3. Faithful multi-tool synthesis.
+   The final response combines several tool results without adding unsupported fields, changing meanings, mixing objects, omitting evidence in a misleading way, or presenting a partial result as complete.
+
+4. Traceable calculation or transformation.
+   Arithmetic, counts, list operations, date checks, temperature/currency/color conversions, ratios, and comparisons are supported when inputs are present and the result is correct or reasonably rounded.
+
+5. Evidence-tied recommendation.
+   A recommendation is score 2 when it clearly follows from returned evidence, tool arguments, tool schemas, URLs, user constraints, transparent assumptions, or common background knowledge, and does not contain a factual error.
+
+6. Accurate limitation, no-result, or failure handling.
+   The assistant states that data is unavailable, a tool failed, a result was not found, a capability is missing, or more input is required, and does not invent the missing answer.
+
+7. Appropriate uncertainty.
+   The response qualifies uncertain claims, distinguishes evidence from inference, and gives next steps or verification paths instead of presenting uncertain facts as confirmed.
+
+8. Self-contained advice, framework, template, or creative content.
+   General guidance, drafting, planning, educational explanation, code templates, common workflows, or creative writing can score 2 when it does not contradict the conversation or contain a factual error.
+
+9. Tool-call-only or waiting-for-input with no factual result claim.
+   If the final assistant state only initiates a tool call, asks for genuinely needed input, or makes no concrete factual/result/completion claim, score 2 for this metric when there is no unsupported claim. This may still fail a different user-requirement-fulfillment metric.
+
+10. User/context facts reused accurately.
+    The response preserves names, IDs, dates, selected options, preferences, prior tool results, and constraints without unsupported additions.
+
+11. Reasonable interpretation of evidence.
+    The response explains, summarizes, ranks, labels, or lightly infers from visible tool/context evidence in a way that is consistent with that evidence.
+
+12. Tool-argument, schema, prompt, or URL based answer.
+    The response uses tool arguments, tool schemas, prompts, filter parameters, or returned/referenced URLs as support for what was requested, what constraints were applied, what prompt was sent, or what tool affordances exist.
+
+## Score 1: Partially evidence-supported
+
+Give score 1 when the main answer is mostly grounded in evidence, but the final response includes a minor factual error, local contradiction, local misattribution, incorrect transformation, or separable unsupported concrete detail. Do not use score 1 merely because the response uses common knowledge, gives general advice, reasonably explains tool results, relies on tool arguments/schema/URLs, or contains operation-status wording.
+
+Common score-1 patterns:
+
+1. Correct core result plus a minor factual error or misattribution.
+   Examples include a wrong non-core field, a small date conversion error, a minor attribution error, a mislabeled qualitative category, a copied value assigned to the wrong nearby entity, or a local detail that conflicts with the visible evidence.
+
+2. Correct core result plus incorrect numbers, dates, rates, units, or calculations.
+   Examples include ungrounded percentages, exact times, currency conversions, P/E ratios, probability ranges, regulatory limits, revenue forecasts, or incorrect but local arithmetic.
+
+3. Correct tool data plus a concrete local external fact that is neither common knowledge nor a reasonable interpretation.
+   Examples include a specific product capability, platform behavior, version-specific documentation detail, legal article number, product specification, or named external resource that is not visible in the sample and is not central enough to make the core answer unsupported.
+
+4. Overgeneralization that creates a factual error.
+   Do not penalize reasonable summaries or interpretations. Penalize only when the response turns evidence into a wrong or materially different factual claim, such as assigning one object's field to another, converting a non-specific aggregate into a specific entity, or making a precise claim that the evidence contradicts.
+
+5. Local contradiction or misreading of a returned field.
+   The response is mostly supported, but one or more fields are wrong, rounded misleadingly, assigned to the wrong entity, or summarized with a changed meaning.
+
+6. Unsupported non-core system or platform behavior detail.
+   The final response adds a concrete behavior detail such as queue behavior, notification behavior, expiration time, training requirement, provenance preservation, or confirmation step that is not visible in the sample, and the detail is not merely an operation-status statement.
+
+7. Tool limitation or error is real, but the explanation is invented.
+   The final response correctly notes a failure or limitation, but invents the reason, exact required parameter, platform behavior, or workaround details.
+
+8. Specific external facts from model knowledge are introduced without evidence and are not common background.
+   Examples include latest docs, exact product specifications, official policy details, legal article numbers, named platform-specific behavior, or account-specific facts not present in the sample. Do not use this pattern for common knowledge, educational explanations, general workflows, or reasonable background advice.
+
+9. High-risk or decision-relevant advice contains unsupported local claims.
+   Health, legal, finance, regulatory, travel, product-purchase, safety, and business recommendations should be evidence-tied. Unsupported local advice in an otherwise useful answer is usually score 1.
+
+10. Sparse metadata is used to infer content semantics.
+    Examples include inferring cookbook recipes from a title, family-friendliness from a Webtoon title, a company's business domain from its name, or event themes from a short description.
+
+11. Identity, relationship, or ownership matching is unsupported.
+    Examples include treating tagged IDs as friends, linking similar surnames, assigning a transliterated name to an ID without a name field, or using a default username as "your" account.
+
+12. Returned evidence is under-reported in a misleading way.
+    The final response omits returned records or narrows a broader result set while implying completeness, but still contains some correct supported content.
+
+13. Mostly supported answer with a small output-level factual mistake.
+    If all key claims are grounded but the response contains a small factual mistake or local mismatch, assign score 1 rather than 2.
+
+Do not assign score 1 merely because the final message is tool-call-only, empty, or lacks a user-visible natural-language result. If it makes no unsupported factual claim, assign score 2 for this metric.
+
+## Score 0: Not evidence-supported
+
+Give score 0 when the core answer depends on severe unsupported or contradicted claims.
+
+Common score-0 patterns:
+
+1. Core answer fabrication.
+   The final response's main conclusion, final option, recommended entity, key answer, or decision-driving fact is unsupported or contradicted by the available evidence.
+
+2. Tool result is absent, empty, failed, or irrelevant, but the assistant gives a concrete core factual answer as if it were tool-supported.
+   The assistant fills in names, prices, dates, IDs, URLs, summaries, policies, or domain facts that no tool/user/context evidence supports, and those facts are the core answer. This does not apply to common knowledge, general advice, creative content, or faithful no-result summaries.
+
+3. Core answer fabricates precise identifiers, links, timestamps, live state, or quantitative values.
+   Examples include fabricated DOI/URL, current time, match ID, audit timestamp, source certification, cost, processing time, article count, financial metric, forecast detail, or status.
+
+4. Tool parameters, examples, hypotheses, or reasoning are treated as proof of a core factual result they cannot support.
+   Tool-call arguments, schemas, prompts, URLs, and examples can support inputs, requested constraints, tool affordances, and prompt content. They do not prove unrelated hidden findings or measurements. Operation-status-only claims remain out of scope.
+
+5. Final response contradicts or overrides key tool results.
+   Examples include using one object's data for another, reporting a different returned value, claiming a corridor has no issue when it was not queried, or declaring a tool result wrong without evidence.
+
+6. Sparse data is expanded into core fabricated analytics.
+   Examples include inventing CAGR, volatility, drawdown, Sharpe ratio, sample totals, weighted scores, cache-hit rates, latency reductions, clinical performance metrics, or other analysis-like numbers not traceable to evidence.
+
+7. Legal, policy, contract, regulatory, medical, scientific, or safety claims are fabricated.
+   Examples include invented GDPR/CCPA/EU provisions, insurance or marina clauses, healthcare scheduling rules, SDS/GHS/ECHA classifications, clinical-trial statuses, DOI metadata, IND timelines, or specific health effects.
+
+8. A non-status factual claim is fabricated as the main answer.
+   Do not assign score 0 merely because the response claims an operation was completed. Assign score 0 only when the main factual answer or recommendation depends on fabricated non-status facts.
+
+9. Detailed travel, local-planning, product, business, broker, finance, account, or platform facts are fabricated as the main answer.
+   Examples include unsupported cruise excursions, route permits, hotel automation, account/VIP/API rules, product durability claims, social-media profile details, lottery-platform features, or market forecasts.
+
+10. Invalid or unsupported code is presented as usable.
+    Score 0 when code or an implementation template makes false assumptions about available data/API structure, contradicts the user context, or contains serious errors that break the core deliverable.
+
+11. Conversation role or context is misunderstood in a way that drives the answer.
+    Score 0 when the final response treats user-provided suggestions as independently verified facts, answers the wrong role/context, or builds conclusions on a mistaken reading of the dialogue.
+
+Do not assign score 0 merely because the final response is empty, content-null, only internal reasoning, or only tool calls. If no unsupported factual claim is visible, assign score 2 for this metric.
+
+Do not assign score 0 for unsupported self-capability or inability statements. Self-capability statements are out of scope for this metric.
+
+# Common Boundary Rules
+
+1. Tool-call-only / missing-final-response
+   - If the final assistant message only initiates a tool call, has empty/content-null text, contains only internal reasoning, or has no user-visible final answer, score 2 for this metric as long as it makes no unsupported factual claim.
+   - Do not use this metric to punish incomplete task fulfillment unless the incompleteness creates an unsupported, misleading, or unverifiable final-response claim.
+
+2. Tool arguments versus tool results
+   - Arguments support what was requested, attempted, passed as input, filtered, or sent as a prompt.
+   - Schemas, descriptions, defaults, examples, and parameter constraints support tool affordances and input/output shape.
+   - Results support what data or metadata was visibly returned.
+   - URLs in tool arguments or results count as evidence for the referenced URL.
+   - Do not use argument/schema/result validity, source realism, query quality, or external truth as a reason to lower this metric when the final response faithfully relies on the visible sample.
+
+3. Limitation, refusal, no-result, or uncertainty
+   - Accurate limitation/no-result/failure statement with no invented core answer: score 2.
+   - Self-capability or inability statements are out of scope; do not score based on whether the capability claim itself is supported.
+   - A fabricated core factual answer after a failed/no-result tool call is score 0 unless it is common knowledge, general advice, or creative/explanatory content.
+
+4. Hallucination or unsupported facts
+   - Core answer fabrication or contradiction: score 0.
+   - Mostly supported answer with a minor factual error or local misattribution: score 1.
+   - Reasonable tool-result explanation, common knowledge, general advice, creative content, or no unsupported key claim: score 2.
+
+5. Calculations and transformations
+   - Correct calculation from visible inputs: score 2.
+   - Small local arithmetic/rounding/unit issue in an otherwise supported answer: score 1.
+   - Core calculation uses missing inputs, wrong units, or fabricated values: score 0.
+
+6. Recommendations and qualitative judgments
+   - Evidence-tied or reasonably inferred recommendation with transparent reasoning: score 2.
+   - Recommendation with a minor factual error or local misattribution: score 1.
+   - Recommendation built mainly on fabricated or contradicted facts: score 0.
+
+7. General knowledge, advice, and creative content
+   - Common knowledge, general advice, educational explanation, routine workflows, and creative/explanatory content can score 2 without tool evidence unless clearly wrong or contradicted.
+   - Themed names, image-prompt details, stylistic associations, implicit creative links, analogy, and explanatory framing are not fabrication by default.
+
+8. Small errors
+   - A small factual error, field mismatch, attribution error, date conversion error, numerical formatting error, or wrong qualitative label prevents score 2 and should usually be score 1.
+   - If the error is the core answer, final option, recommendation target, or decision-driving conclusion, assign score 0.
+
+9. Operation status
+   - Do not score whether an operation-status claim is proven. Execution-status wording such as archived, pushed, sent, saved, generated, configured, verified, or completed is out of scope unless it also introduces a separate factual answer.
+
+# Output Requirements
+
+Return only one strict JSON object. Do not output Markdown, reasoning steps, analysis text, or anything outside JSON.
+
+The JSON must conform to this JSON Schema:
+{{ output_schema_json }}
+
+Field requirements:
+
+- `score`: must be 0, 1, or 2.
+- `reason`: briefly explain why this score was assigned and explicitly identify the main evidence-support boundary.
+- `unsupported_or_contradicted_claims`: list the key unsupported, unverifiable, overextended, or contradicted claims from the final response. Use an empty array when there are no such claims.
+- `evidence_basis`: briefly state the main user/context/tool/metadata evidence used to support the judgment. Mention missing evidence when relevant.
+
+# Input Data
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}
