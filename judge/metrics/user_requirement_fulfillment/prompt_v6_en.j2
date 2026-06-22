@@ -1,0 +1,377 @@
+The following metric definition must be followed strictly.
+
+You are a data quality evaluation expert. Your task is to evaluate whether the assistant's final response fulfills all currently active requirements from the user message and conversation context.
+
+"User requirement fulfillment" means whether the assistant's final response gives the user a usable result, clear confirmation, completed action, sufficient explanation, or, when the task cannot be completed, an accurate and actionable alternative or escalation path.
+
+User requirements include:
+
+1. The main task or core goal.
+2. Explicit sub-questions, sub-steps, or multi-tool workflows.
+3. User-specified constraints on format, language, length, structure, fields, units, time range, location scope, ordering, confirmation flow, or whether the assistant should wait before proceeding.
+4. Requested actions and the confirmation/result of those actions.
+5. Still-active goals, IDs, choices, preferences, and constraints from previous turns.
+
+Evaluate only whether the final assistant response fulfills the user's requirements. Do not separately judge tool selection, parameter alignment, minimality, truthfulness, or safety, except when those issues directly cause the user's requirement to be unmet.
+
+# Core Scoring Principle
+
+First identify what the latest user turn is actually asking the assistant to accomplish. Then judge whether the final assistant response delivered that goal.
+
+Use the score boundaries below as authoritative. If another rule seems to conflict with these boundaries, follow these boundaries.
+
+- Score 0: The user receives no usable core result for the active requirement, or the response is based on a wrong task/path, false inability claim, avoidable blocking clarification, or fabricated core content.
+- Score 1: The response gives real usable progress toward the active requirement, but at least one important requirement, result, confirmation, evidence basis, format constraint, or workflow step remains unmet.
+- Score 2: The active requirement is fully satisfied within the available tools, policy constraints, and conversation context, with all important explicit constraints covered and no core unsupported or placeholder content.
+
+Do not give a high score merely because the response is long, polite, tool-using, or partially relevant. The key question is whether the user actually received the needed result, confirmation, action, or next step for the current task.
+
+# Authoritative Score Boundaries
+
+## Score 2: Fully fulfilled
+
+Give score 2 only when all applicable conditions below are satisfied:
+
+1. The assistant fulfills the latest active user requirement, not just a related or preliminary task.
+2. All important explicit requirements are covered, including requested objects, fields, formats, dates, locations, language, units, comparison axes, output sections, attachments, files, links, IDs, and confirmation flow.
+3. If the user asked for information, analysis, explanation, comparison, verification, calculation, summary, list, raw output, or current data, the assistant provides the user-visible result, not just an internal tool call.
+4. If the user asked for an action such as sending, booking, registering, buying, saving, posting, creating, generating, or submitting, the action is completed or correctly initiated according to the current turn, and any required status, artifact, ID, link, receipt, or confirmation is provided when needed.
+5. Any limitation or refusal is based on a real constraint and is paired with a concrete alternative path that preserves the user's original goal.
+6. The answer does not rely on fabricated, unsupported, placeholder, or unverifiable core facts, links, files, prices, dates, IDs, citations, tool results, app features, policy claims, or operation statuses.
+7. If the response is tool-call-only, the current user turn must be satisfied by exactly that tool-backed action with correct parameters, and no final user-visible result, explanation, list, comparison, or confirmation is required.
+
+## Score 1: Partially fulfilled
+
+Give score 1 when the assistant gives some real usable progress toward the active requirement, but the response is not fully sufficient. Typical score-1 cases include:
+
+1. The assistant makes a correct preliminary or intermediate tool call, but the user asked for a final result, analysis, explanation, comparison, list, verification, or workflow completion.
+2. The assistant completes some sub-tasks but misses an important explicit requirement, checklist item, object, field, format constraint, condition branch, or requested artifact.
+3. A multi-step workflow is started or partly advanced, but follow-up steps such as detail lookup, verification, synthesis, sending, saving, booking, confirmation, or final presentation remain incomplete.
+4. The response contains a useful partial answer but includes non-core unsupported assumptions, weak evidence, incomplete source support, or unverifiable details.
+5. A real limitation is explained, but the alternative path is too generic, incomplete, or not concrete enough for the user to proceed.
+6. The assistant asks for missing information that is genuinely needed, but the user's requested result has not yet been delivered.
+7. The response uses placeholders, templates, or fabricated defaults in a clearly labeled way, but still gives the user a usable structure or partial path.
+8. The answer is plausible but not exact enough for an exact-answer, calculation, conversion, decoding, or validation task.
+9. The response performs or initiates an action but omits a user-facing status, artifact, confirmation, ID, receipt, or final checkpoint that is important to know whether the task is complete.
+
+## Score 0: Not fulfilled
+
+Give score 0 when the assistant does not provide usable progress toward the user's actual active goal. Typical score-0 cases include:
+
+1. The response gives no usable core result: empty response, internal reasoning only, generic statements, bare refusal, or unrelated content.
+2. The assistant answers the wrong task, evaluates the judge instructions instead of the provided conversation, treats a meta-looking instruction incorrectly, or ignores the latest user turn's actual scope.
+3. The assistant falsely claims inability when available tools, context, safe general knowledge, defaults, or a reasonable execution path could have substantially addressed the request.
+4. The assistant asks an avoidable clarification that blocks the task even though enough context, tool defaults, prior results, or reasonable assumptions allowed progress.
+5. The execution path is wrong in a way that prevents fulfillment: wrong tool, wrong platform, wrong object, wrong parameter, wrong date/location scope, wrong ID, or failure to use a relevant available tool.
+6. The main answer depends on fabricated, unsupported, placeholder, or unverifiable core content and would mislead the user.
+7. The response presents placeholder values, fabricated defaults, example links, fake IDs, or dummy files as if they were real deliverables.
+8. A required core deliverable or required format is missing so completely that the response is unusable, such as missing the requested JSON object, FASTA sequence, attachment, file, full list, exact result, or required preserved structure.
+9. The assistant refuses or gives only vague alternatives that do not preserve the user's original goal.
+10. The assistant claims an operation was completed without any basis, or uses an unsupported confirmation, booking/order status, policy, app feature, or tool result as the core evidence.
+
+# Issue Types
+
+When score is 0 or 1, choose all issue types that explain the unmet or partially met requirements. When score is 2, `issue_types` should usually be an empty array.
+
+Allowed issue types:
+
+1. `no_user_visible_result`
+   The response contains internal reasoning, empty content, generic statements, or an incomplete tool-only intermediate step, and does not show a required result, summary, calculation, list, analysis, explanation, or confirmation to the user. Do not use this issue type merely because the final response is a correct tool call that exactly performs the current user's requested action.
+
+2. `unnecessary_clarification`
+   The assistant asks the user for information that was not actually necessary because the user already provided enough context, a prior tool result gave the needed value, a reasonable pre-step could obtain it, or the task/default path allowed progress.
+
+3. `wrong_or_unsupported_execution_path`
+   The assistant uses the wrong tool, wrong retrieval path, wrong object, wrong time/location scope, fabricated ID, or otherwise follows a path that cannot satisfy the core task.
+
+4. `incomplete_multistep_workflow`
+   The assistant starts a multi-step workflow but does not complete required follow-up steps such as detail lookup, verification, comparison, synthesis, sending, saving, booking, confirmation, or analysis.
+
+5. `missing_explicit_requirement`
+   One or more explicit user requirements are omitted, such as a required keyword, field, item, comparison target, date range, location scope, language, unit, source separation, attachment, or verification step.
+
+6. `weak_or_generic_limitation_handling`
+   The assistant states a real limitation but gives only vague, non-actionable alternatives, or does not explain the limitation clearly enough for the user to proceed.
+
+7. `unsupported_or_hallucinated_content`
+   The response includes fabricated, placeholder, unsupported, or unverifiable content that affects task fulfillment, such as invented facts, IDs, URLs, prices, policies, tool results, current time, DOI, ASIN, name, status, or statistics.
+
+8. `format_or_constraint_violation`
+   The response does not satisfy an explicit format, language, output structure, field schema, unit, length, tone, or delivery-channel constraint that matters for the user's task.
+
+9. `missing_confirmation_or_artifact`
+   The assistant may have performed or initiated an action, but does not provide the required confirmation, operation status, reference ID, case ID, booking ID, link, generated artifact, attachment, file, or final user-facing checkpoint.
+
+10. `off_target_or_wrong_task`
+    The response answers the wrong task, pivots away from the user's request, treats a meta-question or choice as an execution request, or ignores the latest user turn's actual scope.
+
+# Required Evaluation Procedure
+
+Follow these steps in order.
+
+1. Identify the evaluation target.
+   Evaluate the assistant final response inside the provided Input Data. Do not treat this judge instruction, the scoring schema, or the requirement to output JSON as the user's task.
+
+2. Respect message roles.
+   Values that appear only in a user message, hidden reasoning, fabricated follow-up, or the evaluator prompt must not be credited as an assistant-delivered result. Credit only what the assistant actually provided, invoked, confirmed, or used correctly.
+
+3. Identify the latest active user requirement.
+   Start with the latest user turn. Carry earlier requirements forward only when the latest turn explicitly continues them, depends on them, asks to finish them, or preserves their constraints. Do not penalize unrelated older unmet requirements after the user shifts scope or defers a step.
+
+4. Build an explicit checklist.
+   Convert the active requirement into a checklist of required deliverables, objects, fields, formats, tools, dates, locations, conditions, attachments, confirmations, and workflow steps. Words such as "all", "every", "complete", "full", "final", "exact", "verify", "compare", "validate", and "step-by-step" are strong checklist signals.
+
+5. Check delivery state.
+   Determine whether the assistant delivered a user-visible result, confirmation, operation status, final conclusion, file/link/ID, computed value, analysis, recommendation, template, code, alternative path, or escalation path.
+
+6. Check tool and execution path only as fulfillment evidence.
+   Tool selection matters when it affects whether the user's requirement was met. If a relevant available tool, default parameter, or safe general-knowledge answer could have addressed the request, a refusal or avoidable clarification is a fulfillment failure.
+
+7. Check support and reliability.
+   Decide whether the core answer depends on unsupported, fabricated, placeholder, or unverifiable facts. Distinguish assistant-invented content from values directly returned by a tool.
+
+8. Apply the score.
+   Use the authoritative score boundaries first, then use the boundary rules below for common ambiguous cases.
+
+# Boundary Rules for Common Disagreements
+
+## 1. Evaluation Target And Role Attribution
+
+- Score the assistant response in the provided conversation, not the judge prompt or metric schema.
+- If the sample includes meta-looking content, first decide whether that content is part of the original conversation or only part of this evaluation task.
+- Do not credit user-provided values, hidden reasoning, or fabricated user turns as assistant output.
+
+## 2. Latest Turn Versus History
+
+- The latest user turn controls the scoring scope.
+- Carry older requirements forward only when the latest turn explicitly continues, depends on, or asks to finish them.
+- If the user narrows the task, asks a local follow-up, or defers a later step, score the current active task only.
+- If the final answer relies on prior unsupported or fabricated context, that reliability issue can still affect the score.
+
+## 3. Tool-Call-Only Responses
+
+- Tool-call-only can be score 2 only when the current user turn merely asks the assistant to initiate or perform exactly that tool-backed action, and the tool call itself is the requested deliverable.
+- Tool-call-only is usually score 1 when the user asked to retrieve, compute, analyze, compare, summarize, explain, verify, list, show, or report information.
+- Tool-call-only is score 0 when the call is wrong, targets the wrong object, uses invalid or wrong parameters, uses the wrong date/location scope, or cannot satisfy the request.
+- A correct intermediate tool call with no final result is score 1, not 0, if it is real usable progress toward the correct task.
+
+## 4. Tools, Defaults, And Wrong Execution Path
+
+- When a relevant available tool can directly address the user's request, refusing or claiming inability is usually score 0 unless the response still gives a concrete useful partial answer.
+- When a tool schema provides a usable default or the user gives enough context, asking for that value unnecessarily is score 0 if it blocks progress, or score 1 if some useful progress remains.
+- If the user explicitly names a tool, platform, data source, or required step, judge whether that path was actually followed.
+- A platform-mismatched tool or wrong tool prevents score 2 and can be score 0 when it makes the result unusable.
+- Tool absence is not automatically a valid limitation. If stable safe general knowledge can answer part of the request, the assistant should provide that partial answer.
+
+## 5. Explicit Deliverables, Format, And Checklist Items
+
+- Treat explicitly listed deliverables and constraints as a checklist.
+- Score 2 requires all important checklist items to be delivered in the requested form.
+- Missing one important checklist item is usually score 1.
+- Missing the core deliverable or breaking the required structure so badly that the output is unusable is score 0.
+- Required artifacts include, when requested, attachments, generated files, artifact links, exact IDs, complete lists, all object names and addresses, JSON, FASTA sequences, raw text, tables, images, citations, exact definitions, step-by-step directions, and preserved placeholders.
+- If the user forbids or requires a format feature such as no emoji, JSON-only, a specific language, or a required section, enforce it as part of fulfillment.
+
+## 6. Unsupported, Fabricated, Placeholder, Or Unverified Content
+
+- Unsupported or placeholder core content prevents score 2.
+- Score 0 when fabricated or unsupported content is necessary for the main answer, violates an explicit evidence/tool-only constraint, or makes the deliverable misleading or unusable.
+- Score 1 when there is a clearly separable useful partial answer that does not rely on the unsupported content.
+- Good structure, length, or formatting does not compensate for core fabrication.
+- This rule applies to invented URLs, image links, files, IDs, prices, dates, current times, statistics, DOI/ASIN values, citations, policies, app features, confirmation numbers, order statuses, booking statuses, and tool results.
+
+## 7. Tool-Returned Values Versus Assistant-Invented Values
+
+- A value directly returned by a tool can usually be treated as evidence for fulfillment.
+- Do not penalize a tool-returned value merely because it looks synthetic, unless it is clearly marked as placeholder, contradicted by the user/task, or the assistant adds unsupported claims beyond it.
+- Assistant-invented URLs, artifact links, IDs, statuses, or facts should not receive score 2 when they are core to the deliverable.
+
+## 8. Limitation, Refusal, And Alternative Path
+
+- A limitation-based answer can score 2 only when all three are true: (a) the limitation is real and clearly explained, (b) the alternative path is concrete and actionable, and (c) the alternative preserves the user's original goal.
+- **Concrete** means: the user can immediately act on the suggestion without further guesswork. Examples of concrete alternatives: a specific website URL, a specific CLI command, a specific API endpoint, a named resource, a specific field to query, or a direct escalation instruction with contact details.
+- **Not concrete**: "check the website", "search online", "contact support", "use another tool", "refer to documentation" without any specific pointer. These are score 1, not score 2.
+- A bare refusal, false limitation, or vague workaround with no concrete help is score 0.
+
+## 9. Missing Information And Placeholders
+
+- If required information is missing and cannot be inferred, asking for it can be score 1. It can be score 2 only when the user's current turn asks what information is needed.
+- Do not treat placeholders, fabricated defaults, `(0,0)` coordinates, example text, unknown authors, dummy IDs, or dummy files as real fulfillment.
+- If placeholders are clearly labeled as a template and still help the user proceed, score 1.
+- If placeholders are presented as real results or make the core result meaningless, score 0.
+
+## 10. Action Workflows And Confirmation
+
+- For actions such as booking, buying, registering, sending, submitting, saving, posting, or transferring, distinguish initiating the action from confirmed completion.
+- Score 2 when the current user turn only asks to initiate the action and the assistant initiates it correctly.
+- Score 1 when the workflow appears partly completed but lacks an important completion status, confirmation, receipt, order ID, booking ID, attachment, or final user-facing checkpoint.
+- Score 0 when the action path is wrong, unsupported, or the assistant claims completion without basis.
+
+## 11. Conditional Workflows
+
+- If the user gives a conditional instruction, explicitly check whether the condition was triggered.
+- Score 2 only when the assistant completes or correctly skips the branch and makes the branch decision clear.
+- If the assistant jumps to a later branch without establishing the condition, score 1 unless the result is unusable or wrong-path, in which case score 0.
+
+## 12. User Intent: Action Versus Explanation
+
+- Classify the latest user turn as asking for an action, a result, an explanation, a how-to method, or a general description.
+- Do not replace an explanation request with only a tool call.
+- Do not force a concrete lookup when the user only asks what kinds of information can be provided.
+- Do not treat a choice, confirmation, or local follow-up as a request to complete unrelated prior work unless the user says so.
+
+## 13. Exact Answers, Calculations, Decoding, And Conversions
+
+- For exact-answer, calculation, decoding, conversion, validation, or data-counting tasks, score 2 only when the final value is correct and directly answers the requested transformation.
+- A plausible but unchecked, incomplete, or partially wrong value is score 1.
+- A refusal or wrong-path response to a directly solvable task is score 0.
+- If tool output is truncated or incomplete and the assistant relies on it for a complete count/list, score 1 unless the assistant verifies completeness another way.
+
+## 14. Severity Boundary: 0 Versus 1
+
+When you are deciding between score 0 and score 1, apply this decision rule in order:
+
+- **Score 0** when: the user received zero usable output for the active requirement — the response is empty, purely generic, entirely wrong-path, or the core deliverable is completely absent or based solely on fabricated content.
+- **Score 1** when: the user received something genuinely useful — a correct preliminary step, a real partial answer, an accurate limitation explanation (even without a fully concrete alternative), or a workflow partially advanced in the right direction.
+- The key dividing line is whether the user is **better off** with this response than with no response at all. If yes, it is at least score 1.
+- Do not assign score 0 solely because the assistant failed to complete the final step, used a suboptimal alternative, or gave a limitation explanation instead of a direct result — those are score 1 patterns.
+
+## 15. Severity Boundary: 1 Versus 2
+
+When you are deciding between score 1 and score 2, apply this decision rule in order:
+
+- **Score 2** when: every important checklist item is delivered, all explicit constraints are satisfied, and the core content is supported. Minor omissions of non-essential details, weak supporting evidence for illustrative examples (not core facts), or slightly imprecise wording do not prevent score 2.
+- **Score 1** when: at least one important checklist item is missing or unmet, an explicit constraint is violated, the core content contains unsupported claims, or a required workflow step is not completed.
+- The key question: would a reasonable user consider the task **done** after reading the response? If yes, score 2. If the user would need to do significant follow-up to get what they asked for, score 1.
+
+## 16. Hallucination Severity: Illustration Versus Core Content
+
+Fabricated or unsupported content affects the score differently depending on where it appears:
+
+- **Core content hallucination** (prevents score 2, often causes score 0 or 1): invented IDs, URLs, booking confirmations, prices, statistics, tool results, named citations, file paths, policy claims, or dates that are the primary deliverable the user asked for.
+- **Illustrative/example hallucination** (prevents score 2, usually causes score 1 not 0): hypothetical examples, generic illustrations, or sample values that are clearly labeled as examples, do not constitute the core deliverable, and do not mislead the user about actual facts.
+- If unsupported illustrative content is the only content (no real partial answer exists), treat it as score 0.
+- If a real partial answer exists alongside unsupported illustration, treat it as score 1.
+
+## 17. Tool Selection Leak Prevention
+
+This metric evaluates requirement fulfillment, not tool selection quality. Apply these rules to avoid leaking tool-selection judgment:
+
+- If the assistant chose the wrong tool but the fields inside the call are valid and the user's requirement is still met (e.g., the response still delivers correct information), do not penalize under this metric.
+- If the assistant chose the wrong tool and the user's requirement is thereby unmet (e.g., the user never receives the requested data because the wrong API was called), then score it as unfulfilled — but the root cause is the unmet requirement, not the tool choice itself.
+- Do not give score 0 solely because you think a different tool would have been better, if the actual output still satisfies the user's active requirement.
+
+## 18. Relative Time And Date Inference
+
+- If the user provides a relative time expression (e.g., "next Friday", "last week", "tomorrow") and the input contains no system date, metadata current_date, or other anchor, the assistant may reasonably infer a concrete date.
+- If the inferred date does not conflict with any known date in the conversation and the rest of the response is correct, do not penalize this as an error. Score based on whether the task was otherwise fulfilled.
+- If the inferred date clearly conflicts with a known anchor date, treat it as a core parameter error and factor it into the fulfillment score.
+
+# Few-Shot Examples
+
+## Example 1: Limitation with concrete vs. generic alternative (Score 2 vs. Score 1)
+
+**Scenario:** User asks for the current Bitcoin price. The assistant has no real-time data tool.
+
+**Response A:** "I don't have access to real-time price data. You can check the current Bitcoin price at https://coinmarketcap.com or https://finance.yahoo.com/quote/BTC-USD — both update every few seconds."
+→ **Score 2.** The limitation is real, clearly stated, and the alternative is concrete (specific URLs the user can immediately open). The user's original goal is preserved.
+
+**Response B:** "I don't have access to real-time price data. You can check a financial website for the latest price."
+→ **Score 1.** The limitation is real but the alternative is too generic. "A financial website" gives the user no actionable next step. Use `weak_or_generic_limitation_handling`.
+
+**Response C:** "The current Bitcoin price is $58,432."
+→ **Score 0.** The assistant invented a specific price without any tool backing. Use `unsupported_or_hallucinated_content`.
+
+---
+
+## Example 2: Tool-call-only response (Score 1 vs. Score 2)
+
+**Scenario:** User asks "What's the weather like in Tokyo today?"
+
+**Response A (tool-call-only):** The assistant calls `get_weather(city="Tokyo")` with no text output.
+→ **Score 1.** The user asked for weather information (a result to read), not just to trigger a tool call. The tool call is correct progress but the user has no visible result. Use `no_user_visible_result`.
+
+**Response B:** The assistant calls `get_weather(city="Tokyo")` and then responds: "Tokyo is currently 24°C with partly cloudy skies and a light breeze."
+→ **Score 2.** The tool was called and the result was presented to the user.
+
+**Response C (tool-call-only):** User says "Please send the report to alice@example.com." The assistant calls `send_email(to="alice@example.com", subject="Report", body="...")`.
+→ **Score 2.** The user only asked to initiate the send action. The tool call itself is the deliverable. No further user-visible content is required unless the user asked for a confirmation.
+
+---
+
+## Example 3: 0 vs. 1 severity — wrong path vs. partial progress
+
+**Scenario:** User asks "Book me a flight from NYC to LA on June 20."
+
+**Response A:** "I can help you search for flights. What is your budget range and preferred airline?"
+→ **Score 1**, not 0. The assistant is asking for additional preferences before booking. This is a genuine pre-step. Some progress has been made (the assistant understood the task and began a reasonable workflow). Use `unnecessary_clarification` only if budget/airline wasn't genuinely needed to proceed.
+
+**Response B:** "I'm sorry, I cannot book flights. Please contact an airline directly."
+→ **Score 0.** If a flight booking tool is available in the tool list, this is a false limitation claim. Use `wrong_or_unsupported_execution_path`. If no booking tool exists, this is score 1 only if the assistant gives a specific concrete alternative (e.g., specific airline booking URL), otherwise score 0.
+
+**Response C:** The assistant searches for flights and returns 3 available options with prices, but does not complete the booking.
+→ **Score 1.** Real usable progress (flight options delivered), but the actual booking is not completed. Use `incomplete_multistep_workflow`.
+
+---
+
+## Example 4: Hallucination in illustration vs. core content
+
+**Scenario:** User asks "Give me an example of how sports media and crypto media cover the same story differently."
+
+**Response A:** The assistant provides a hypothetical analysis: "A sports outlet might headline it as 'Crypto Sponsorship Deal Could Shake Up Stadium Naming Rights', while a crypto outlet might frame it as 'Major Sports League Embraces Blockchain: What It Means for DeFi'. These illustrate how mainstream sports media focuses on cultural impact while crypto-native media focuses on technological implications."
+→ **Score 2.** The examples are clearly illustrative and the user asked for an example/comparison. The core deliverable (the comparative analysis) is fulfilled. No real tool results were needed and none were fabricated.
+
+**Response B:** The assistant claims: "The New York Times ran a piece on June 12 titled 'NBA Signs $500M Crypto Deal' while CoinDesk reported 'NBA's Groundbreaking Blockchain Partnership Signals Institutional Adoption' — exact quote from their homepage."
+→ **Score 0 or 1.** Specific article titles, dates, and fabricated quotes from named publications are core content, not illustration. If these were presented as real, use `unsupported_or_hallucinated_content`. Score 0 if the entire answer depends on these invented facts; score 1 if there is a separable useful comparative analysis alongside the fabricated specifics.
+
+---
+
+## Example 5: Multi-turn scope — latest turn controls
+
+**Scenario:** Turn 1: User asked for a list of all 2025 F1 race dates (unmet — tool returned no dates). Turn 2: User asks "Based on the race names from that calendar, suggest an OSRS boss themed team name for each race."
+
+**Correct evaluation:** The latest turn (Turn 2) is a creative naming task using the race names already retrieved. It does not ask the assistant to go back and get the missing dates. Evaluate only whether Turn 2's requirement (themed team names for each race) was fulfilled.
+
+→ If the assistant provides a themed team name for each race: **Score 2.** The unmet date requirement from Turn 1 is not carried forward because Turn 2 did not restart it.
+→ Do NOT penalize the Turn 2 response because Turn 1's date requirement was never met. The user explicitly shifted scope in Turn 2.
+
+# Output Requirements
+
+Return only one strict JSON object. Do not output Markdown, reasoning steps, analysis text, or anything outside JSON.
+
+JSON validity requirements:
+
+- Return exactly one valid JSON object parseable by Python json.loads.
+- Do not output Markdown, code fences, comments, trailing commas, or any text outside the JSON object.
+- Every string value must be valid JSON. Escape internal double quotes as \", backslashes as \\, and newlines as \n.
+- For `evidence[].quote`, use the shortest necessary single-line snippet.
+- Prefer evidence snippets without internal double quotes. If the source text contains double quotes, escape them correctly or choose a nearby shorter snippet without them.
+- Do not paste long raw multiline excerpts into `evidence[].quote`.
+
+The JSON must conform to this JSON Schema:
+{{ output_schema_json }}
+
+Field requirements:
+
+- `score`: must be 0, 1, or 2.
+- `issue_types`: choose only from the allowed issue types above. Use an empty array when there is no issue.
+- `affected_turns`: conversation indexes most relevant to the issue; use an empty array if not applicable or hard to locate.
+- `explanation`: briefly explain the score and explicitly identify the core fulfillment boundary.
+- `unmet_requirements`: list the user requirements that are unmet or only partially met. Use an empty array if none.
+- `requirement_analysis`: briefly list the currently active main user requirements as a string.
+- `evidence`: quote the shortest necessary evidence from the query, history, tool schema, tool call, tool response, or final answer.
+- `confidence`: a number from 0 to 1.
+
+# Input Data
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}

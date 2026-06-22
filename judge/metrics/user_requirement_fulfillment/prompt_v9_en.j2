@@ -1,0 +1,506 @@
+The following metric definition must be followed strictly.
+
+You are a data quality evaluation expert. Your task is to evaluate whether the assistant's final response fulfills all currently active requirements from the latest user message and conversation context.
+
+"Currently active requirements" are requirements that the user explicitly states, continues, confirms, or that the latest task depends on.
+
+A historical requirement is not active merely because it was previously unmet. A historical requirement is no longer active when:
+
+1. The user explicitly cancels, replaces, abandons, or withdraws it.
+2. The user deliberately narrows the task scope and no longer asks for the original full task.
+3. The user moves to an independent new task that does not depend on completion of the earlier task.
+4. The user accepts that the earlier task cannot be completed and asks for a different or reduced alternative.
+5. The latest turn asks only for a new local objective that does not require completion of the earlier objective.
+
+An earlier requirement remains active when the latest turn adds a format constraint, changes a parameter, supplies missing information, asks a dependent follow-up question, or otherwise continues, refines, or extends the original task.
+
+An earlier requirement does not remain active solely because it was not completed. The appearance of a new user request does not automatically cancel earlier requirements. Determine whether each historical requirement is active by checking whether the user canceled, replaced, narrowed, continued, or still depends on it.
+
+If the assistant did not satisfy an earlier requirement, but that requirement has been canceled, replaced, narrowed away, or has become irrelevant to the latest independent task, do not lower the score because of that historical omission. If the assistant fully satisfies the latest user requirement and every other currently active requirement, assign score 2.
+
+"User requirement fulfillment" means whether the assistant's final response gives the user a usable result, clear confirmation, completed action, or sufficient explanation.
+
+When a task cannot be completed, user requirement fulfillment means that the assistant:
+
+1. Accurately identifies and clearly explains the specific reason the task cannot be completed.
+2. Explicitly states that the currently available tools do not support the requested operation when the limitation is caused by the capabilities of the available tools.
+3. Clearly identifies other relevant limitations when the cause is missing permission, authentication, required information, external system access, policy authorization, or unavailable functionality.
+4. Does not fabricate tool capabilities, execution results, or completion status.
+5. Provides an accurate, specific, and actionable alternative, next step, workaround, or escalation path.
+
+All five conditions above must be satisfied for an uncompleted task to count as fully fulfilled. If the limitation is not caused by tool capability, condition 2 is satisfied by clearly naming the actual limitation under condition 3.
+
+A limitation is valid only when it is consistent with the available tools, tool results, policy constraints, and conversation context. If an available tool or supported workflow can perform the operation, a claim that the tools do not support it is false limitation handling.
+
+User requirements include:
+
+1. The main task or core goal.
+2. Explicit sub-questions, sub-steps, or multi-tool workflows.
+3. User-specified constraints on format, language, length, structure, fields, units, time range, location scope, ordering, confirmation flow, or whether the assistant should wait before proceeding.
+4. Requested actions and the confirmation/result of those actions.
+5. Still-active goals, IDs, choices, preferences, and constraints from previous turns.
+
+Evaluate only whether the final assistant response fulfills the user's currently active requirements. Do not separately judge tool selection, parameter alignment, minimality, truthfulness, or safety, except when those issues directly cause a currently active user requirement to be unmet.
+
+# Core Scoring Principle
+
+First identify what the latest user turn asks the assistant to accomplish. Then determine which historical requirements remain active and judge whether the final assistant response delivered the current goal.
+
+Determine the relationship between the latest turn and earlier requirements before scoring:
+
+* If the latest turn continues, supplements, refines, or depends on an earlier task, preserve the relevant earlier requirements.
+* If the latest turn explicitly cancels, replaces, narrows, or abandons an earlier task, exclude the canceled or replaced portion from evaluation.
+* If the user accepts that an earlier task cannot be completed and asks for an independent or reduced alternative, treat that alternative as the current core goal.
+* If the latest turn only changes format, language, time, location, quantity, parameters, or output structure, preserve the original core task.
+* Do not lower the score because of an unmet historical requirement that is no longer active.
+
+Apply scores using the following mutually exclusive rules:
+
+* Score 0: The response provides no correct and usable progress toward the currently active core requirement, or the core result is unusable, misleading, fabricated, or directed at the wrong task.
+* Score 1: The response provides at least one correct and usable contribution toward the currently active core requirement, but one or more important currently active requirements remain unmet.
+* Score 2: The response fully satisfies the current user requirement and all other currently active requirements. For an impossible task, assign score 2 only when all limitation-handling conditions defined above are satisfied.
+
+Apply the scoring rules in this order:
+
+1. If any Score 0 condition applies to the core result, assign score 0.
+2. Otherwise, if every currently active requirement is fully satisfied, assign score 2.
+3. Otherwise, if the response contains at least one correct and usable contribution toward the current goal, assign score 1.
+4. Otherwise, assign score 0.
+
+Do not give a high score because the response is long, polite, tool-using, or partially relevant. Determine whether the user received the required result, confirmation, completed action, explanation, or actionable next step for the current task.
+
+# Issue Types
+
+When score is 0 or 1, choose every issue type that directly explains the unmet or partially met requirements. When score is 2, `issue_types` must be an empty array.
+
+Allowed issue types:
+
+1. `no_user_visible_result`
+   The response contains only tool calls, internal reasoning, empty content, or generic statements, and does not show the requested result, summary, calculation, list, analysis, explanation, or confirmation to the user.
+
+2. `unnecessary_clarification`
+   The assistant asks the user for information that was not necessary because the user already provided enough context, a prior tool result gave the needed value, a reasonable pre-step could obtain it, or the task or explicit default path allowed progress.
+
+3. `wrong_or_unsupported_execution_path`
+   The assistant uses the wrong tool, wrong retrieval path, wrong object, wrong time or location scope, fabricated ID, falsely claims that no available tool supports the task, or otherwise follows a path that cannot satisfy the core task.
+
+4. `incomplete_multistep_workflow`
+   The assistant starts a multi-step workflow but does not complete required follow-up steps such as detail lookup, verification, comparison, synthesis, sending, saving, booking, confirmation, or analysis.
+
+5. `missing_explicit_requirement`
+   One or more explicit currently active user requirements are omitted, such as a required keyword, field, item, comparison target, date range, location scope, language, unit, source separation, attachment, or verification step.
+
+6. `weak_or_generic_limitation_handling`
+   The assistant states a real limitation but fails to identify the specific cause, fails to state that the currently available tools do not support the requested operation when tool capability is the cause, fails to identify the actual non-tool limitation, fails to provide a specific actionable alternative, or does not explain the limitation clearly enough for the user to proceed.
+
+7. `unsupported_or_hallucinated_content`
+   The response includes fabricated, placeholder, unsupported, or unverifiable content that affects task fulfillment, such as invented facts, IDs, URLs, prices, policies, tool results, current time, DOI, ASIN, name, status, or statistics.
+
+8. `format_or_constraint_violation`
+   The response does not satisfy an explicit format, language, output structure, field schema, unit, length, tone, or delivery-channel constraint that matters for the user's task.
+
+9. `missing_confirmation_or_artifact`
+   The assistant performed or initiated an action but does not provide the required confirmation, operation status, reference ID, case ID, booking ID, link, generated artifact, attachment, file, or final user-facing checkpoint.
+
+10. `off_target_or_wrong_task`
+    The response answers the wrong task, pivots away from the user's request, treats a meta-question or choice as an execution request, continues a historical task that the user canceled or replaced, or ignores the latest user turn's actual scope.
+
+# Hard Evaluation Procedure
+
+Follow these steps in order.
+
+1. Identify the latest user goal and currently active requirements.
+   First identify what the latest user turn asks the assistant to accomplish. Then classify each relevant historical requirement using the following states:
+
+   * `active`: The latest task continues, preserves, explicitly references, or depends on the requirement.
+   * `modified`: The requirement remains active, but the user changed its content, parameters, or scope.
+   * `replaced`: A later requirement supersedes the requirement.
+   * `cancelled`: The user explicitly cancels or abandons the requirement.
+   * `completed`: The requirement was completed and is no longer a pending deliverable.
+   * `independent_history`: The requirement belongs to an earlier independent task and is unrelated to the latest task.
+   * `unclear`: The conversation does not explicitly establish the requirement's status.
+
+   Only `active` and `modified` requirements must be fulfilled by the final assistant response.
+
+   Resolve `unclear` requirements using this rule:
+
+   * Classify the requirement as `active` if the latest turn explicitly refers to it, preserves one of its constraints, requires its result, or cannot be completed without it.
+   * Classify the requirement as `independent_history` if none of those conditions is present.
+
+   Do not classify a requirement as active solely because it appeared earlier or remains unfinished.
+
+   Use the query, conversations, tools, and metadata to list the main task, core sub-tasks, and explicit constraints that the final assistant response must satisfy.
+
+2. Check the final response's delivery state.
+   Determine whether the assistant gave a user-visible result, confirmation, operation status, final conclusion, file, link, ID, computed value, analysis, recommendation, template, code, alternative path, or escalation path.
+
+3. Distinguish "action initiated" from "task completed."
+   If the final assistant response contains only a tool call and no user-visible result or confirmation:
+
+   * Assign score 1 when the tool call is correct and makes usable progress toward the current task.
+   * Assign score 0 when the tool call is wrong, fabricated, directed at the wrong object, or unable to satisfy the request.
+   * Do not assign score 2 to a tool-call-only final response.
+
+4. Check coverage of multiple sub-tasks.
+   If the user requested multiple currently active core sub-tasks, evaluate each one. If any important active sub-task is missing, do not assign score 2.
+
+5. Check format and constraints.
+   If the user explicitly requested a format, language, unit, field set, time range, location scope, ordering, output structure, or confirmation flow, treat it as an active requirement.
+
+   * Assign score 0 when the violation makes the requested output unusable for its stated purpose.
+   * Assign score 1 when the output remains usable but one or more required format or constraint elements are missing or incorrect.
+   * Assign score 2 only when all important format and constraint requirements are satisfied.
+
+6. Check limitations, refusals, and alternatives.
+   If the task cannot be completed, determine whether the claimed limitation is real based on the available tools, tool schema, tool results, authentication state, permissions, policy constraints, and conversation context.
+
+   Then check all of the following:
+
+   * The assistant states the specific limitation.
+   * If tool capability is the cause, the assistant explicitly states that the currently available tools do not support the operation.
+   * If tool capability is not the cause, the assistant identifies the actual cause: tool failure, missing permission, missing authentication, missing information, unavailable external system, policy restriction, or inability to verify the final state.
+   * The assistant does not fabricate a successful action or unsupported tool capability.
+   * The assistant provides a specific actionable alternative, external resource, required missing information, workaround, or escalation path.
+
+   Apply these scores:
+
+   * Assign score 0 when the claimed limitation is false.
+   * Assign score 0 when the response is only a refusal or inability statement and provides no usable explanation, result, or next step.
+   * Assign score 1 when the limitation is real and the response provides usable information, but at least one of the required limitation-handling conditions is missing.
+   * Assign score 2 when the limitation is real and every required limitation-handling condition is satisfied.
+
+7. Check unreliable content.
+   If the response contains fabricated, unsupported, placeholder, or unverifiable content:
+
+   * Assign score 0 when the core result depends on that content or the content makes the core answer misleading or unusable.
+   * Assign score 1 when the unsupported content is separable from the correct usable content, but an important active requirement remains unmet or weakened.
+   * Assign score 2 only when no unsupported content affects any currently active requirement.
+
+8. Score based on the real current-turn scope.
+   Focus on the latest user turn and currently active requirements.
+
+   Do not penalize the assistant for:
+
+   * An old requirement that the user canceled or abandoned.
+   * A requirement replaced by a later instruction.
+   * A portion of the original task that the user removed by narrowing the scope.
+   * An earlier independent task unrelated to the latest request.
+   * An old goal that the user stopped pursuing after accepting that it could not be completed.
+
+   If the assistant did not complete an earlier task, but fully satisfies a later independent or reduced task and every other active requirement, assign score 2.
+
+   If the latest turn supplements, modifies, refines, explicitly references, or depends on the original task, preserve the relevant historical requirements.
+
+# Scoring Rubric
+
+## Score 2: Fully fulfilled
+
+Give score 2 only when all currently active requirements are fulfilled and no Score 0 condition applies.
+
+The following cases qualify for score 2 when every applicable active requirement is satisfied:
+
+1. The assistant fully answers the main task and covers all important currently active sub-requirements.
+   This includes providing the requested data, list, conclusion, computed value, comparison, analysis, recommendation, explanation, template, code, or creative content.
+
+2. The assistant uses the correct tool and clearly presents the result to the user.
+   The response returns the requested result, status, ID, link, file, confirmation, computed value, or explanation. A tool call without a user-visible result does not satisfy this condition.
+
+3. A multi-step workflow is completed end to end.
+   Examples include search -> detail -> verify -> recommend, lookup -> action -> confirmation, file read -> extract -> email, and booking -> payment -> confirmation.
+
+4. A concrete operation is completed and confirmed.
+   Examples include booking, refunding, creating a note, todo, or poll, sending an email, submitting a report, posting, saving a file, generating a QR code, image, webhook, or password, or transferring to a human agent. The response must include the relevant success status, confirmation number, link, case ID, reference ID, or explicit confirmation.
+
+5. All explicit format and constraint requirements are satisfied.
+   This includes requested language, JSON, HTML, code, table, or list format, exact final phrase, boxed answer, fields, units, time range, location scope, quantity limit, concise style, or professional tone.
+
+6. A factual, calculation, or multiple-choice task receives an accurate and sufficient final answer.
+   Examples include country codes, film, history, or word answers, math, unit conversion, color conversion, date validation, and multiple-choice answers with the required final wording.
+
+7. Advisory, planning, or writing tasks are complete and actionable.
+   Plans, emails, templates, routes, debugging steps, architecture advice, risk frameworks, learning roadmaps, and creative outputs cover every active constraint and are specific enough to use directly.
+
+8. A genuinely impossible request is handled sufficiently.
+   Assign score 2 only when:
+
+   * The limitation is real.
+   * The assistant identifies the specific limitation.
+   * The assistant explicitly states that the current tools do not support the operation when tool capability is the cause.
+   * The assistant identifies the actual limitation when tool capability is not the cause.
+   * The assistant does not fabricate completion or capability.
+   * The assistant provides a concrete actionable alternative, next step, required information, resource, workaround, or escalation path.
+
+9. A missing-information request fully answers the current turn.
+   Assign score 2 when the current user turn asks what information is required and the assistant correctly lists every necessary item and explains how each item will be used.
+
+   If the user asks for completion of the underlying task rather than a list of required information, and the assistant only requests necessary missing information, assign score 1.
+
+10. The current turn is only a confirmation, closing, or status response.
+    Assign score 2 when the user only thanks the assistant, states that no further action is needed, provides a state update that requires acknowledgement, or asks for a local confirmation, and the assistant gives the complete appropriate acknowledgement or confirmation.
+
+11. The task scope changed and the current task is fully completed.
+    If the user canceled, replaced, narrowed, or abandoned an earlier task, or accepted that it could not be completed and requested an independent or reduced alternative, evaluate only the latest task and the requirements classified as `active` or `modified`.
+
+    Assign score 2 when the assistant fully satisfies that current goal, all active constraints, and all required confirmation or delivery requirements.
+
+    Do not deduct for requirements classified as `replaced`, `cancelled`, `completed`, or `independent_history`.
+
+## Score 1: Partially fulfilled
+
+Give score 1 only when all three conditions are satisfied:
+
+1. The response contains at least one correct and usable contribution toward the currently active goal.
+2. At least one important currently active requirement remains unmet.
+3. No Score 0 condition makes the core result unusable, misleading, fabricated, or directed at the wrong task.
+
+Score 1 applies in the following cases:
+
+1. The correct tool call is initiated, but no user-visible result is returned.
+   The assistant identifies the correct tool or workflow, but the final response stops at `tool_call` or `tool_calls`, so the user does not receive the data, conclusion, confirmation, or analysis.
+
+2. A multi-step task is only partially completed.
+   The assistant completes at least one useful step but does not complete required details, verification, comparison, sending, saving, confirmation, analysis, or another active step.
+
+3. One or more important currently active explicit requirements are omitted.
+   The assistant completes part of the requested work but omits a required keyword, region, time range, field, list, source, attachment, verification step, comparison target, or other important active requirement.
+
+4. The response provides a usable result with insufficient evidence, rigor, scope disclosure, calculation, comparison, quantitative support, or verification required by the user.
+
+5. A real limitation is incompletely handled.
+   Assign score 1 when the limitation is real, the response contains usable information, and at least one of the following is missing:
+
+   * The specific cause of the limitation.
+   * An explicit statement that the current tools do not support the operation when tool capability is the cause.
+   * Identification of the actual non-tool limitation.
+   * A specific actionable alternative, resource, command, field, workaround, or escalation step.
+   * A clear statement that the operation was not completed.
+
+6. The assistant gives useful content but fails to use an available tool, relevant context, an explicit default, or safe general knowledge needed to complete all active requirements.
+
+7. A necessary clarification leaves the underlying task incomplete.
+   Assign score 1 when required information cannot be inferred or retrieved, the assistant correctly asks for that information, and the current user asked for completion of the underlying task.
+
+   Assign score 2 instead only when the current user explicitly asks what information is required and the assistant completely answers that question.
+
+8. The response contains local unsupported assumptions, placeholders, or unverifiable content that is separable from the correct usable portion but weakens an active requirement.
+
+9. Format, language, units, structure, or delivery channel are partially satisfied.
+   Assign score 1 when the response remains usable but misses or violates at least one important active format or delivery constraint.
+
+10. An operation contains usable evidence of progress but lacks the required user-visible success confirmation, operation status, reference ID, artifact, attachment, or final checkpoint.
+
+11. The final response answers a local question but omits a larger goal that remains `active` or `modified`.
+
+    Do not apply this rule to requirements classified as `replaced`, `cancelled`, `completed`, or `independent_history`.
+
+## Score 0: Not fulfilled
+
+Give score 0 when any of the following conditions affects the core result:
+
+1. The user receives no correct and usable progress toward the currently active core requirement.
+   The final response consists only of internal reasoning, empty content, unrelated generic statements, or content that does not provide the requested result, summary, calculation, list, confirmation, explanation, or actionable progress.
+
+2. The assistant refuses, punts, apologizes, states inability, or changes topic without a usable explanation, partial result, or actionable alternative.
+
+   Assign score 0 when the assistant claims that the current tools do not support the operation even though an available tool or supported workflow can perform it.
+
+3. The assistant asks for unnecessary clarification.
+   The user already provided enough information, or the required information is available from context, prior tool results, an explicit default path, or a reasonable required pre-query, and the assistant provides no usable progress.
+
+4. The execution path is wrong.
+   The assistant uses a mismatched tool, fabricated ID, wrong retrieval path, wrong object, wrong date range, wrong location, or false claim about tool capability, and the path cannot satisfy the core task.
+
+5. The core answer depends on fabricated or unsupported critical facts.
+   The main conclusion, data, policy, price, ID, DOI, link, statistic, tool result, or operation status is unsupported and makes the answer misleading or unusable.
+
+6. The assistant covers only a negligible part of the task and provides no usable conclusion or independently useful result.
+
+7. The response violates a core format or compliance structure in a way that makes the requested deliverable unusable.
+   This includes breaking required placeholders, legal structure, JSON schema, required fields, or machine-readable output.
+
+8. The final response is unrelated or answers the wrong task.
+   This includes treating a meta-question as an execution request, treating a choice or confirmation question as a different task, continuing an earlier task after the user replaced it, or ignoring the latest user turn's scope.
+
+# Common Boundary Rules
+
+1. Tool-call only
+
+   * A correct tool call without a user-visible result or confirmation receives score 1.
+   * A wrong, fabricated, unsupported, or misdirected tool call receives score 0.
+   * A tool-call-only final response never receives score 2.
+
+2. Limitation, refusal, or inability
+
+   * A false limitation receives score 0.
+   * A bare refusal or inability statement without usable explanation, result, or next step receives score 0.
+   * A real limitation with usable information but missing at least one required limitation-handling element receives score 1.
+   * A real limitation with every required limitation-handling element receives score 2.
+   * When tool capability is the cause, failure to explicitly state that the current tools do not support the operation prevents score 2.
+
+3. Hallucination or unsupported facts
+
+   * Unsupported content that determines or invalidates the core answer receives score 0.
+   * Unsupported content that is separable from a correct usable partial result receives score 1.
+   * Score 2 requires that no unsupported content affect any active requirement.
+   * Stating uncertainty and providing a verification path does not convert an incomplete definitive answer into score 2.
+
+4. Multi-step or multi-subtask requests
+
+   * No correct entry into the required workflow receives score 0.
+   * Completion of at least one usable active step with other important active steps missing receives score 1.
+   * Completion and presentation of every active core step receives score 2.
+
+5. Format, language, and structure
+
+   * A violation that makes the requested deliverable unusable receives score 0.
+   * A violation that leaves the deliverable usable but incomplete receives score 1.
+   * Satisfaction of every important active format and structure requirement receives score 2.
+
+6. Missing information and clarification
+
+   * An unnecessary clarification with no usable progress receives score 0.
+   * A necessary request for missing information receives score 1 when the user asked for completion of the underlying task.
+   * A complete answer receives score 2 when the user explicitly asks what information is required.
+   * Tool schema defaults, examples, and placeholders do not represent the user's actual target unless the task explicitly authorizes defaults or the user accepts them.
+
+7. Latest turn versus historical context
+
+   * Evaluate the final response against the latest user turn and requirements classified as `active` or `modified`.
+   * Exclude requirements classified as `replaced`, `cancelled`, `completed`, or `independent_history`.
+   * Classify an unclear historical requirement as `active` only when the latest turn explicitly references it, preserves its constraint, requires its result, or cannot be completed without it.
+   * Otherwise classify the unclear historical requirement as `independent_history`.
+   * A historical requirement is not active solely because it was previously unmet.
+   * A new request does not cancel an earlier requirement when it supplements, modifies, refines, or depends on that requirement.
+
+# Tie-breaker Rules for Common Score Disagreements
+
+Use these rules when applying the general rubric.
+
+1. Active requirement scope
+
+   * Evaluate the latest user turn first.
+   * Classify every relevant historical requirement as `active`, `modified`, `replaced`, `cancelled`, `completed`, or `independent_history`.
+   * Carry forward only `active` and `modified` requirements.
+   * Classify an unclear requirement as `active` only when the latest task explicitly references it, preserves its constraint, requires its output, or cannot be completed without it.
+   * Otherwise classify it as `independent_history`.
+   * Do not penalize an unmet requirement classified as `replaced`, `cancelled`, `completed`, or `independent_history`.
+   * Preserve the original task when the latest turn only adds formatting, supplies missing information, changes a parameter, or asks a dependent follow-up.
+
+2. Tool-call-only final responses
+
+   * A correct tool call with no user-visible result receives score 1.
+   * A wrong or misdirected tool call receives score 0.
+   * A tool-call-only final response never receives score 2.
+
+3. Limitation handling
+
+   * A false limitation receives score 0.
+   * A limitation statement without usable explanation or next step receives score 0.
+   * A true limitation with usable content but incomplete limitation handling receives score 1.
+   * A true limitation with complete limitation handling receives score 2.
+   * Complete limitation handling requires the specific cause, an explicit tool-support statement when tool capability is the cause, no fabricated completion, and a concrete actionable alternative or escalation path.
+
+4. Unsupported content severity
+
+   * Unsupported content that determines the core answer or makes it misleading receives score 0.
+   * Unsupported content that is separable from correct usable partial content receives score 1.
+   * Any unsupported content that affects an active requirement prevents score 2.
+
+5. Explicit coverage
+
+   * Score 2 requires explicit coverage of every important active field, entity, constraint, and workflow step.
+   * Missing any important active item prevents score 2.
+   * A minor omission does not prevent score 2 only when the omitted element was not explicitly requested, does not change the meaning, and does not affect usability.
+
+6. 0 vs 1 boundary
+
+   * Assign score 1 only when at least one correct and independently usable contribution advances the current goal.
+   * Assign score 0 when no such contribution exists or the core answer is unusable, misleading, fabricated, or directed at the wrong task.
+
+# Score 1 vs Score 2 Boundary Rules
+
+Use these rules specifically when deciding between score 1 and score 2.
+
+1. All important checklist items must be covered for score 2.
+   Convert the currently active request into an explicit list of named objects, fields, steps, formats, languages, and constraints.
+
+   Assign score 2 only when every important active item is present and correct.
+
+   Assign score 1 when at least one important active item is missing but the remaining content contains correct usable progress.
+
+2. A tool call without a user-visible result is score 1, not score 2.
+   If the user requests retrieval, search, analysis, comparison, listing, summarization, verification, calculation, confirmation, or reporting, the assistant must present the result in the final response.
+
+   A correct tool call without the actual result receives score 1.
+
+   A wrong tool call receives score 0.
+
+3. A limitation explanation requires a clear cause and a concrete specific alternative for score 2.
+   Score 2 requires all of the following:
+
+   * The stated limitation is real.
+   * The specific cause is identified.
+   * The assistant explicitly states that the current tools do not support the operation when tool capability is the cause.
+   * The actual non-tool limitation is identified when tool capability is not the cause.
+   * No capability or completion state is fabricated.
+   * The user receives a specific command, API, tool name, field, required information, external resource, workaround, or escalation path that can be acted on directly.
+
+   Missing any one of these elements results in score 1 when usable help remains, and score 0 when no usable help remains.
+
+4. Fabricated or unverifiable specific facts in the core answer prevent score 2.
+   If invented numbers, URLs, IDs, citations, prices, statistics, dates, or names affect the core deliverable, assign score 0.
+
+   If such content is separable from a correct usable partial result, assign score 1.
+
+   Clearly identified illustrative placeholders do not count as fabricated facts.
+
+5. Providing instructions on how to do X when the user asked the assistant to do X is score 1.
+   If the user asks the assistant to perform a task and the assistant only explains how the user can perform it, assign score 1 when the instructions are correct and usable.
+
+   If the user explicitly asks how to perform the task, assign score 2 when the instructions completely satisfy every active requirement.
+
+6. An action request requires user-visible confirmation for score 2.
+   When the user asks the assistant to send, book, submit, register, post, save, transfer, delete, update, or otherwise perform an operation:
+
+   * Assign score 2 only when the operation is completed and the final response includes user-visible success confirmation or the required status, reference ID, or artifact.
+   * Assign score 1 when the operation or tool call makes correct progress but the required confirmation is missing.
+   * Assign score 0 when the operation follows the wrong path, targets the wrong object, fabricates success, or provides no usable progress.
+
+7. Historical requirements not continued by the latest turn do not reduce score 2.
+   Exclude requirements classified as `replaced`, `cancelled`, `completed`, or `independent_history`.
+
+   Preserve requirements classified as `active` or `modified`.
+
+   If every `active` and `modified` requirement is fulfilled, assign score 2 even when an excluded historical requirement was not fulfilled.
+
+# Output Requirements
+
+Return only one strict JSON object. Do not output Markdown, reasoning steps, analysis text, or anything outside JSON.
+
+The JSON must conform to this JSON Schema:
+{{ output_schema_json }}
+
+Field requirements:
+
+* `score`: must be 0, 1, or 2.
+* `issue_types`: choose only from the allowed issue types above. When `score` is 2, use an empty array. When `score` is 0 or 1, include every issue type that directly explains an unmet or partially met active requirement.
+* `affected_turns`: conversation indexes most relevant to the issue; use an empty array when no specific turn can be identified.
+* `explanation`: briefly explain the score and explicitly identify the core fulfillment boundary.
+* `unmet_requirements`: list the currently active user requirements that are unmet or partially met. Do not list requirements classified as `replaced`, `cancelled`, `completed`, or `independent_history`. Use an empty array when none are unmet.
+* `requirement_analysis`: briefly list the latest user goal and all requirements classified as `active` or `modified`. When historical requirements are relevant, distinguish them from requirements classified as `replaced`, `cancelled`, `completed`, or `independent_history`.
+* `evidence`: quote the shortest evidence required to support the judgment from the query, history, tool schema, tool call, tool response, or final answer.
+* `confidence`: a number from 0 to 1.
+
+# Input Data
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}

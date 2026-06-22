@@ -1,0 +1,116 @@
+Metric: User Requirement Fulfillment
+
+Definition:
+Evaluate whether the assistant's final response adequately fulfills all requirements from the user message and conversation context. Requirements include the main task, sub-questions, format constraints, language requirements, content scope, tool usage requirements, and still-active user goals from prior turns in the conversation.
+
+When evaluating, check:
+1. Whether the assistant identified and responded to the user's main task.
+2. Whether any explicitly stated sub-questions or focus areas were omitted.
+3. Whether the assistant followed the user's explicit constraints on format, language, length, structure, and content scope.
+4. If an action was requested, whether the final response reports the result in a way that addresses the user's goal.
+5. If the task could not be completed, whether the assistant clearly explains why, what was accomplished, and what the user can do next.
+6. Whether the response only partially addresses requirements, deflects, speaks in generalities, oversimplifies, or fails to deliver the result the user actually needed.
+7. The user's core goal matters more than peripheral formatting or wording details, but explicit constraints must still be respected.
+
+# Score Definitions
+
+Score 2 — Fully fulfilled:
+The user's core requirement and all important active sub-requirements are met. A reasonable user would consider the task done after reading the response, with no significant follow-up needed.
+
+Score 1 — Partially fulfilled:
+The response makes a correct start or provides partial value toward the user's goal, but at least one important requirement remains unmet. The user would need to do meaningful additional work to fully accomplish their task.
+
+Score 0 — Not fulfilled:
+The response provides no correct and usable progress toward the user's actual goal. The user receives nothing they can act on.
+
+# Scoring Boundaries
+
+## Deciding between 1 and 2
+
+Ask: Would a reasonable user consider their task completely done after reading this response, with no significant follow-up needed?
+- If yes: score 2, provided no condition below prevents it.
+- If no: score 1.
+
+Conditions that prevent score 2 (assign score 1 instead, unless a score 0 condition also applies):
+
+B1. The assistant only made a tool call with no user-visible result.
+If the user asked to retrieve, find, analyze, calculate, list, compare, explain, verify, or show something, the assistant must present that information in its reply text. A correct tool call alone is not sufficient. A tool call without any user-visible result text receives score 1, not score 2.
+Exception: if the user's request was solely to trigger or initiate a specific action (e.g., "send this email", "submit this form") and the tool call performs exactly that action, the tool call alone may satisfy the requirement.
+
+B2. A limitation was stated but the alternative is vague.
+If the assistant cannot complete the task and explains why, it must also provide a concrete and immediately actionable alternative. "Check a relevant website" or "search online" or "contact support" without a specific pointer is too vague. Vague alternatives result in score 1. A specific named resource, URL, command, API, or escalation path reaches score 2.
+
+B3. The core answer contains fabricated or unsupported specific facts.
+If the assistant's response includes invented numbers, URLs, IDs, citations, prices, statistics, dates, or names that it did not retrieve from a tool or the conversation, and these affect the core deliverable, the score is at most 1.
+Exception: clearly illustrative placeholders that are obviously not presented as real facts do not prevent score 2.
+
+B4. An important explicit requirement is missing.
+If the user explicitly asked for specific fields, objects, format, language, a verification step, or a named deliverable, and that item is absent, the score is at most 1.
+
+B5. An action was completed but no user-visible confirmation was given.
+If the user asked the assistant to send, book, submit, register, post, save, or transfer something, the final response must include an explicit success confirmation, reference ID, or result status. Without it, the user cannot verify success. Score 1.
+Exception: if the user's message is purely confirmatory ("Yes, go ahead") and no confirmation message was requested, a correct tool call alone may be score 2.
+
+## Deciding between 0 and 1
+
+Ask: Is there at least one correct, usable piece of information or progress toward the user's actual goal?
+- If yes: score 1, provided no score 0 condition applies.
+- If no: score 0.
+
+Conditions for score 0:
+
+Z1. No usable progress at all.
+The response is empty, consists only of a tool call, contains only generic statements, internal reasoning, or unrelated content.
+
+Z2. The assistant falsely claims inability.
+If an available tool, the conversation context, or safe general knowledge could have substantially addressed the request, claiming inability is a false limitation. Score 0.
+
+Z3. The execution path is completely wrong.
+The assistant used the wrong tool, fabricated an ID, targeted the wrong object, or followed a path that cannot produce the result the user asked for.
+
+Z4. The core answer depends entirely on fabricated facts.
+If the main conclusion, data, or status the user needs is invented and would mislead the user, score 0.
+
+Z5. The response answers a completely different task.
+This includes treating the evaluator instructions as the user's task, ignoring the latest user turn, or pivoting to an unrelated topic without any acknowledgement.
+
+## Multi-turn conversations
+
+Evaluate the final response against the latest user turn. Carry forward earlier requirements only when the latest turn explicitly continues, depends on, or restates them. Do not penalize the response for earlier requirements that the user has moved past, replaced, or narrowed away.
+
+# Output
+
+- score: 0 / 1 / 2
+- issue_types: choose from the list below all types that apply. Use an empty array when score is 2.
+- affected_turns: list the conversation turn indexes most relevant to the issue. Use an empty array if not applicable.
+- unmet_requirements: list any requirements that are unmet or only partially met. Use an empty array if none.
+- requirement_analysis: briefly summarize the main active user requirements you identified, as a single string.
+- explanation: briefly explain why you assigned the score, and identify the specific boundary that determined it.
+- evidence: quote the shortest passage that best supports your judgment.
+- confidence: a number from 0.0 to 1.0.
+
+Allowed issue types:
+- no_user_visible_result
+- unnecessary_clarification
+- wrong_or_unsupported_execution_path
+- incomplete_multistep_workflow
+- missing_explicit_requirement
+- weak_or_generic_limitation_handling
+- unsupported_or_hallucinated_content
+- format_or_constraint_violation
+- missing_confirmation_or_artifact
+- off_target_or_wrong_task
+
+# Input Data
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}

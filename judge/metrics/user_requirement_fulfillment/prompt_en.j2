@@ -1,0 +1,36 @@
+Metric: User Requirement Fulfillment
+
+Definition:
+This metric evaluates whether the assistant's final response fully satisfies all requirements raised in the user message and conversation context. Here, "requirements" include the main task, sub-questions, format requirements, content requirements, language requirements, constraints, tool-use requirements, and user goals from multi-turn context that remain active.
+
+When scoring, focus on:
+1. Whether the assistant identified and responded to the user's main task.
+2. Whether the assistant omitted any sub-question or key point explicitly raised by the user.
+3. Whether the assistant followed the user's requirements for output format, language, length, structure, and content scope.
+4. If the user requested an action, whether the final response states the action result, and whether that result is sufficient for the user's goal.
+5. If the task could not be completed, whether the assistant clearly explains why, what has been completed, and what feasible next steps remain.
+6. Whether the response only answers part of the requirements, changes the topic, stays generic, oversimplifies, or fails to provide the final result the user actually needs.
+7. Fulfillment of the user's core goal should matter more than minor formatting or wording issues.
+
+Scoring:
+Assign a score of 0, 1, or 2 based on how fully the final response satisfies all user requirements for this metric. Do not mechanically count requirements. Instead, consider the number and importance of omitted requirements, whether omissions affect the core task, whether explicit user constraints were violated, and whether the final response is sufficient for the user to consider the task complete.
+
+Output:
+- score: 0 / 1 / 2
+- reason: Briefly explain why this score was assigned.
+- unmet_requirements: If any exist, list the user requirements that were unmet or only partially fulfilled.
+- requirement_analysis: Briefly list the main user requirements you identified.
+
+Input data:
+
+query:
+{{ query }}
+
+conversations:
+{{ conversations_json }}
+
+tools:
+{{ tools_json }}
+
+metadata:
+{{ metadata_json }}
