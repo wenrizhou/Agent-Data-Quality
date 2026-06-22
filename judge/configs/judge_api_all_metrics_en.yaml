@@ -16,8 +16,8 @@ client:
   base_url: null
   api_key: null
   use_chat_messages: true
-  batch_size: 8
-  max_concurrency: 4
+  batch_size: 16
+  max_concurrency: 8
   temperature: 0.0
   max_tokens: 2048
   timeout: 120.0
@@ -25,19 +25,21 @@ client:
   retry_delay: 1.0
 
 metrics:
-  - name: specificity
-    prompt: prompt_v2.j2
-  - name: parameter_alignment
-    prompt: prompt_v4.j2
-  - name: tool_selection
-    prompt: prompt_v2.j2
-  - name: user_requirement_fulfillment
-    prompt: prompt_v1.j2
-  - name: final_response_evidence_support
-  - name: minimality
+  - name: specificity_en
+    prompt: prompt_en.j2
+  - name: parameter_alignment_en
+    prompt: prompt_v2_en.j2
+  - name: tool_selection_en
+    prompt: prompt_v2_en.j2
+  - name: user_requirement_fulfillment_en
+    prompt: prompt_v8_en.j2
+  - name: final_response_evidence_support_en
+    prompt: prompt_v2_en.j2
+  - name: minimality_en
+    prompt: prompt_v1_en.j2
 
 output:
   dir: auto
   base_dir: outputs
-  run_name: all_metrics_api
+  run_name: all_metrics_api_en
   resume: true
