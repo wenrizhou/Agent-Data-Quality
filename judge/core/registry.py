@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -53,6 +54,13 @@ class BaseMetric:
         }
 
 
+@dataclass(frozen=True)
+class MetricSpec:
+    path: Path
+    config_path: Path
+    module_path: Path
+
+
 def discover_metric_dirs(metrics_root: Path) -> dict[str, Path]:
     if not metrics_root.exists():
         return {}
@@ -63,11 +71,38 @@ def discover_metric_dirs(metrics_root: Path) -> dict[str, Path]:
     return out
 
 
+def discover_metric_specs(metrics_root: Path) -> dict[str, MetricSpec]:
+    if not metrics_root.exists():
+        return {}
+    out: dict[str, MetricSpec] = {}
+    for path in sorted(metrics_root.iterdir()):
+        if not path.is_dir():
+            continue
+
+        default_config = path / "metric.yaml"
+        default_module = path / "metric.py"
+        if default_config.exists() and default_module.exists():
+            out[path.name] = MetricSpec(path, default_config, default_module)
+
+        for config_path in sorted(path.glob("*.yaml")):
+            if config_path.name == "metric.yaml":
+                continue
+            raw = load_config(config_path)
+            module_name = str(raw.get("module") or f"{config_path.stem}.py")
+            module_path = path / module_name
+            if not module_path.exists():
+                continue
+            name = str(raw.get("name") or config_path.stem)
+            out.setdefault(name, MetricSpec(path, config_path, module_path))
+    return out
+
+
 def load_metric_config(
     metric_dir: Path,
     overrides: dict[str, Any] | None = None,
+    config_path: Path | None = None,
 ) -> MetricConfig:
-    raw = load_config(metric_dir / "metric.yaml")
+    raw = load_config(config_path or metric_dir / "metric.yaml")
     overrides = overrides or {}
     defaults = raw.get("defaults") or {}
     params = {**defaults, **(overrides.get("params") or {})}
@@ -83,13 +118,18 @@ def load_metric_config(
     )
 
 
-def load_metric(metric_dir: Path, overrides: dict[str, Any] | None = None) -> MetricPlugin:
-    config = load_metric_config(metric_dir, overrides)
-    metric_py = metric_dir / "metric.py"
+def load_metric(
+    metric_dir: Path,
+    overrides: dict[str, Any] | None = None,
+    config_path: Path | None = None,
+    module_path: Path | None = None,
+) -> MetricPlugin:
+    config = load_metric_config(metric_dir, overrides, config_path)
+    metric_py = module_path or metric_dir / "metric.py"
     if not metric_py.exists():
         raise FileNotFoundError(f"Metric missing metric.py: {metric_dir}")
 
-    module_name = f"judge_metric_{metric_dir.name}"
+    module_name = f"judge_metric_{metric_dir.name}_{metric_py.stem}"
     spec = importlib.util.spec_from_file_location(module_name, metric_py)
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load metric module: {metric_py}")
@@ -106,7 +146,7 @@ def load_configured_metrics(
     metrics_root: Path,
     metric_entries: list[dict[str, Any] | str],
 ) -> list[MetricPlugin]:
-    discovered = discover_metric_dirs(metrics_root)
+    discovered = discover_metric_specs(metrics_root)
     plugins: list[MetricPlugin] = []
     for entry in metric_entries:
         if isinstance(entry, str):
@@ -119,5 +159,12 @@ def load_configured_metrics(
             raise FileNotFoundError(
                 f"Metric {name!r} not found under {metrics_root}"
             )
-        plugins.append(load_metric(metric_dir, entry))
+        plugins.append(
+            load_metric(
+                metric_dir.path,
+                entry,
+                config_path=metric_dir.config_path,
+                module_path=metric_dir.module_path,
+            )
+        )
     return plugins

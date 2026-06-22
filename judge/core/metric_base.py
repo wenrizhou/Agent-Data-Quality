@@ -12,6 +12,19 @@ from .registry import BaseMetric
 from .schemas import JudgeCase, JudgeResult, JudgeTask
 
 
+EVIDENCE_SOURCE_TYPES = [
+    "query",
+    "history",
+    "conversations",
+    "assistant",
+    "tool_schema",
+    "tools",
+    "tool_call",
+    "tool_response",
+    "final_answer",
+]
+
+
 class SampleJsonMetric(BaseMetric):
     """Sample-level metric whose judge response is a JSON object."""
 
@@ -200,14 +213,7 @@ class SampleJsonMetric(BaseMetric):
                     "properties": {
                         "source": {
                             "type": "string",
-                            "enum": [
-                                "query",
-                                "history",
-                                "tool_schema",
-                                "tool_call",
-                                "tool_response",
-                                "final_answer",
-                            ],
+                            "enum": EVIDENCE_SOURCE_TYPES,
                         },
                         "quote": {"type": "string"},
                     },
